@@ -73,8 +73,10 @@ class Api::ExecutionController < Api::BaseController
       
       # Add plugins directory to Rails view paths temporarily so partials can be found
       # This allows 'plugins/mondrian/common' to resolve correctly  
-      plugins_parent_path = Rails.root.join('app').to_s  # Need /app/app to find plugins
+      plugins_parent_path = Rails.root.join('app').to_s
+      plugins_views_path = Rails.root.join('app', 'plugins').to_s
       prepend_view_path(plugins_parent_path)
+      prepend_view_path(plugins_views_path)
       
       template_path_to_render = "plugins/#{plugin_name}/views/#{template_file}"
       Rails.logger.info "Attempting to render template: #{template_path_to_render}"
