@@ -28,6 +28,13 @@ class PluginExecutorService
   private
 
   def execute_plugin_code(plugin_code, plugin_name, settings)
+    # Load the Base class first
+    base_class_file = @plugins_path.join('base.rb')
+    if File.exist?(base_class_file)
+      base_code = File.read(base_class_file)
+      eval(base_code)
+    end
+    
     # Create a safe execution environment
     plugin_module = Module.new
     
@@ -36,7 +43,15 @@ class PluginExecutorService
     
     # Look for plugin class (convention: plugin name in CamelCase)
     plugin_class_name = plugin_name.camelize
+    
+    # Debug logging
+    Rails.logger.info "Looking for plugin class: #{plugin_class_name}"
+    Rails.logger.info "Plugin module constants: #{plugin_module.constants}"
+    Rails.logger.info "Global Plugins constants: #{defined?(Plugins) ? Plugins.constants : 'Plugins not defined'}"
+    
     plugin_classes = find_plugin_classes(plugin_module, plugin_class_name)
+    
+    Rails.logger.info "Found plugin classes: #{plugin_classes.map(&:name)}"
     
     if plugin_classes.empty?
       raise "No plugin class found in #{plugin_name}"
@@ -44,7 +59,7 @@ class PluginExecutorService
     
     # Use the first matching plugin class
     plugin_class = plugin_classes.first
-    plugin_instance = plugin_class.new
+    plugin_instance = plugin_class.new(settings)
     
     # Execute the plugin
     if plugin_instance.respond_to?(:locals)
@@ -64,18 +79,32 @@ class PluginExecutorService
   def find_plugin_classes(plugin_module, expected_name)
     classes = []
     
+    # Check direct constants in plugin_module
     plugin_module.constants.each do |const_name|
       const = plugin_module.const_get(const_name)
       if const.is_a?(Class)
+        Rails.logger.info "Found class in plugin_module: #{const.name}"
         classes << const
+      elsif const.is_a?(Module)
+        # Check nested modules (like Plugins module)
+        Rails.logger.info "Found module in plugin_module: #{const.name}"
+        const.constants.each do |nested_const_name|
+          nested_const = const.const_get(nested_const_name)
+          if nested_const.is_a?(Class)
+            Rails.logger.info "Found nested class: #{nested_const.name}"
+            classes << nested_const
+          end
+        end
       end
     end
     
-    # Also check nested modules (like Plugins::RoutePlanner)
+    # Also check global Plugins module if it exists
     if defined?(Plugins)
+      Rails.logger.info "Checking global Plugins module"
       Plugins.constants.each do |const_name|
         const = Plugins.const_get(const_name)
         if const.is_a?(Class)
+          Rails.logger.info "Found class in global Plugins: #{const.name}"
           classes << const
         end
       end
