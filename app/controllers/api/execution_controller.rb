@@ -1,15 +1,28 @@
 class Api::ExecutionController < Api::BaseController
   include ActionView::Rendering
   include ActionController::Helpers
+  
+  # Ensure API-only behavior
+  before_action :set_api_headers
+  
   def execute
     plugin_name = params[:name]
     settings = transform_checkbox_values(params[:settings] || {})
     layout = params[:layout] || 'full'
     trmnl_data = params[:trmnl] || {}
     
+    Rails.logger.info "=== GitHub Plugin Debug ==="
+    Rails.logger.info "Plugin name: #{plugin_name}"
+    Rails.logger.info "Settings: #{settings.inspect}"
+    Rails.logger.info "GITHUB_API_TOKEN present: #{!ENV['GITHUB_API_TOKEN'].nil?}"
+    Rails.logger.info "GITHUB_API_TOKEN length: #{ENV['GITHUB_API_TOKEN']&.length}"
+    Rails.logger.info "Rails credentials plugins: #{Rails.application.credentials.plugins rescue 'ERROR accessing credentials.plugins'}"
+    
     begin
       # Execute plugin to get data
+      Rails.logger.info "About to execute plugin: #{plugin_name}"
       result = PluginExecutorService.new.execute(plugin_name, settings, trmnl_data)
+      Rails.logger.info "Plugin execution result: success=#{result[:success]}, error=#{result[:error]}"
       
       if result[:success]
         plugin_data = result[:data] || {}
@@ -45,6 +58,10 @@ class Api::ExecutionController < Api::BaseController
   
   private
   
+  def set_api_headers
+    response.headers['Content-Type'] = 'application/json' unless params[:action] == 'execute' && request.format == :html
+  end
+  
   # Transform boolean values to strings that Ruby plugins expect
   def transform_checkbox_values(settings)
     settings.transform_values do |value|
@@ -55,7 +72,7 @@ class Api::ExecutionController < Api::BaseController
       end
     end
   end
-  
+
   def render_erb_template(plugin_name, layout, data)
     # Map layout names to ERB template files
     template_file = case layout
@@ -83,6 +100,24 @@ class Api::ExecutionController < Api::BaseController
       # Set instance variables for template access
       data.each do |key, value|
         instance_variable_set("@#{key}", value)
+      end
+      
+      # Define helper methods in the current binding so they're available in ERB
+      def git_commit_grayscale(count)
+        case count.to_i
+        when 0
+          'bg--gray-7'
+        when 1..2
+          'bg--gray-5'
+        when 3..5
+          'bg--gray-4'
+        when 6..10
+          'bg--gray-3'
+        when 11..15
+          'bg--gray-2'
+        else
+          'bg--gray-1'
+        end
       end
       
       # Add plugins directory to Rails view paths temporarily so partials can be found

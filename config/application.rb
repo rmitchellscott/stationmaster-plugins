@@ -40,5 +40,23 @@ module StationmasterPlugins
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+    
+    # Load TRMNL internationalization locales
+    config.after_initialize do
+      require 'trmnl/i18n'
+      TRMNL::I18n.load_locales
+      
+      # Set base_url from environment variable for image serving
+      if ENV['RAILS_BASE_URL']
+        Rails.application.credentials.define_singleton_method(:base_url) { ENV['RAILS_BASE_URL'] }
+      end
+      
+      # Configure GitHub API token from environment variable
+      if ENV['GITHUB_API_TOKEN']
+        # Create nested credentials structure for plugins.github_commit_graph_token
+        plugins_credentials = Struct.new(:github_commit_graph_token).new(ENV['GITHUB_API_TOKEN'])
+        Rails.application.credentials.define_singleton_method(:plugins) { plugins_credentials }
+      end
+    end
   end
 end

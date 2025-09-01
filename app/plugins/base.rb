@@ -46,6 +46,21 @@ class Base
     @plugin_settings ||= PluginSettingsProxy.new(@trmnl_data['plugin_settings'] || {})
   end
   
+  # Helper method for accessing user locale
+  def locale
+    user.locale
+  end
+  
+  # Helper method for Rails translations
+  def t(key, **options)
+    I18n.t(key, **options)
+  end
+  
+  # Helper method for Rails localization
+  def l(object, **options)
+    I18n.l(object, **options)
+  end
+  
   # Ensure Rails compatibility for templates
   def self.ensure_rails_compatibility!
     return if defined?(Rails) && Rails.respond_to?(:application)
@@ -101,6 +116,11 @@ class Base
     # Get user's timezone
     def tz
       @user_data['time_zone_iana'] || 'UTC'
+    end
+    
+    # Get user's locale
+    def locale
+      @user_data['locale'] || 'en'
     end
   end
   

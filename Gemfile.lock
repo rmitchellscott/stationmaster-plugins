@@ -204,6 +204,8 @@ GEM
     thruster (0.1.15-aarch64-linux)
     thruster (0.1.15-x86_64-linux)
     timeout (0.4.3)
+    trmnl-i18n (0.4.0)
+      railties (~> 8.0)
     trmnl-liquid (0.2.1)
       actionview (~> 8.0)
       liquid (~> 5.6)
@@ -235,6 +237,7 @@ DEPENDENCIES
   rack-cors
   rails (~> 8.0.2, >= 8.0.2.1)
   thruster
+  trmnl-i18n
   trmnl-liquid
   tzinfo-data
 

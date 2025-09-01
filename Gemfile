@@ -27,6 +27,7 @@ gem "rack-cors"
 # Additional gems for our plugin service
 gem "liquid", "~> 5.0"
 gem "trmnl-liquid"
+gem "trmnl-i18n"
 gem "httparty", "~> 0.21"
 
 group :development, :test do
