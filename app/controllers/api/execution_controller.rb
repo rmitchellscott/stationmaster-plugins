@@ -102,23 +102,29 @@ class Api::ExecutionController < Api::BaseController
         instance_variable_set("@#{key}", value)
       end
       
-      # Define helper methods in the current binding so they're available in ERB
-      def git_commit_grayscale(count)
-        case count.to_i
-        when 0
-          'bg--gray-7'
-        when 1..2
-          'bg--gray-5'
-        when 3..5
-          'bg--gray-4'
-        when 6..10
-          'bg--gray-3'
-        when 11..15
-          'bg--gray-2'
-        else
-          'bg--gray-1'
+      # Create helper module and include it in ActionView::Base so methods are available in templates
+      helper_module = Module.new do
+        def git_commit_grayscale(count)
+          # GitHub contribution levels with refined ranges
+          case count.to_i
+          when 0
+            'bg-white'      # No contributions
+          when 1..3
+            'bg--gray-5'    # Low activity
+          when 4..7
+            'bg--gray-4'    # Medium-low activity
+          when 8..10
+            'bg--gray-3'    # Medium activity
+          when 11..20
+            'bg--gray-2'    # Medium-high activity
+          else
+            'bg-black'      # High activity (20+)
+          end
         end
       end
+      
+      # Include helper methods in ActionView::Base so they're available to render_to_string
+      ActionView::Base.include(helper_module)
       
       # Add plugins directory to Rails view paths temporarily so partials can be found
       # Problem: Templates call render 'plugins/plugin_name/partial_name'  
