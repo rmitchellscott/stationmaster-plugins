@@ -34,7 +34,7 @@
       <div class="grid grid--row grid--top">
         <% ordered_phase_sequence.each do |phase| %>
           <div class="flex flex--row flex--center">
-            <span class="label label--small <%= 'label--inverted' if phase[:current] %>"><%= phase[:date] %></span>
+            <span class="label label--small <%= 'label--inverted' if phase[:current] %>" data-pixel-perfect="true"><%= phase[:date] %></span>
           </div>
         <% end %>
       </div>
@@ -48,7 +48,7 @@
       <div class="grid grid--row grid--top">
         <% ordered_phase_sequence.each do |phase| %>
           <div class="flex flex--row flex--center">
-            <span class="label label--small truncate-none <%= 'label--inverted' if phase[:current] %>">
+            <span class="label label--small truncate-none <%= 'label--inverted' if phase[:current] %>" data-pixel-perfect="true">
               <%= phase[:name] %>
             </span>
           </div>
@@ -62,24 +62,24 @@
       <div class="item col--span-4">
         <div class="meta"></div>
         <div class="content">
-          <span class="value value--xsmall"><%= next_phase[:name] %></span>
-          <span class="label"><%= t('renders.lunar_calendar.next_phase') %> (<%= next_phase[:date] %>)</span>
+          <span class="value value--xsmall" data-pixel-perfect="true"><%= next_phase[:name] %></span>
+          <span class="label" data-pixel-perfect="true"><%= t('renders.lunar_calendar.next_phase') %> (<%= next_phase[:date] %>)</span>
         </div>
       </div>
 
       <div class="item col--span-2">
         <div class="meta"></div>
         <div class="content">
-          <span class="value value--xsmall"><%= next_full_moon %></span>
-          <span class="label"><%= t('renders.lunar_calendar.next_full_moon') %></span>
+          <span class="value value--xsmall" data-pixel-perfect="true"><%= next_full_moon %></span>
+          <span class="label" data-pixel-perfect="true"><%= t('renders.lunar_calendar.next_full_moon') %></span>
         </div>
       </div>
 
       <div class="item col--span-2">
         <div class="meta"></div>
         <div class="content">
-          <span class="value value--xsmall"><%= next_new_moon %></span>
-          <span class="label"><%= t('renders.lunar_calendar.next_new_moon') %></span>
+          <span class="value value--xsmall" data-pixel-perfect="true"><%= next_new_moon %></span>
+          <span class="label" data-pixel-perfect="true"><%= t('renders.lunar_calendar.next_new_moon') %></span>
         </div>
       </div>
     </div>
@@ -87,8 +87,8 @@
 
   <div class="title_bar">
     <img class="image" src="<%= Rails.application.credentials.base_url %>/images/plugins/lunar_calendar--render.svg" />
-    <span class="title"><%= t('renders.lunar_calendar.title') %></span>
-    <span class="instance"><%= instance_name %></span>
+    <span class="title" data-pixel-perfect="true"><%= t('renders.lunar_calendar.title') %></span>
+    <span class="instance" data-pixel-perfect="true"><%= instance_name %></span>
   </div>
 </div>
 
