@@ -78,6 +78,9 @@ class PluginDiscoveryService
         'description' => "Configuration for #{key.humanize.downcase}"
       }
       
+      # Check if field should be optional based on default value patterns
+      field_config['optional'] = is_field_optional?(key, content)
+      
       # Add field-specific configurations
       case field_config['field_type']
       when 'password'
@@ -196,5 +199,47 @@ class PluginDiscoveryService
     end
     
     options
+  end
+
+  def is_field_optional?(key, content)
+    # Check for various patterns that indicate a field has default values or is optional
+    
+    # Pattern 1: Methods that provide defaults when setting is not present
+    # e.g., "return default_value unless settings['key'].present?"
+    if content.match(/return\s+.+\s+unless\s+settings\[['"]#{Regexp.escape(key)}['"]\]\.present\?/)
+      return true
+    end
+    
+    # Pattern 2: Conditional assignment with defaults
+    # e.g., "settings['key'] || default_value"
+    if content.match(/settings\[['"]#{Regexp.escape(key)}['"]\]\s*\|\|\s*/)
+      return true
+    end
+    
+    # Pattern 3: Methods that handle missing settings gracefully
+    # e.g., def method_name = settings['key'] || default
+    if content.match(/def\s+\w*#{Regexp.escape(key.gsub('_', '.*'))}\w*\s*=.*settings\[['"]#{Regexp.escape(key)}['"]\].*\|\|/)
+      return true
+    end
+    
+    # Pattern 4: Ternary operators with presence checks
+    # e.g., "settings['key'].present? ? settings['key'] : default"
+    if content.match(/settings\[['"]#{Regexp.escape(key)}['"]\]\.present\?\s*\?\s*settings\[['"]#{Regexp.escape(key)}['"]\]\s*:\s*/)
+      return true
+    end
+    
+    # Pattern 5: Checkbox fields that have explicit true/false checks should be optional by default
+    if key.match?(/^(show_|display_|enable_|disable_)/) && 
+       content.match(/settings\[['"]#{Regexp.escape(key)}['"]\]\s*==\s*['"]yes['"]/)
+      return true
+    end
+    
+    # Pattern 6: Check if there's a method definition that provides a default for this key
+    method_name = key.gsub('_', '.*')
+    if content.match(/def\s+#{method_name}.*?return\s+.*unless.*settings\[['"]#{Regexp.escape(key)}['"]\]/m)
+      return true
+    end
+    
+    false
   end
 end

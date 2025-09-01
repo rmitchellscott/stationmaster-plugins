@@ -3,7 +3,7 @@ class PluginExecutorService
     @plugins_path = Rails.root.join('app', 'plugins')
   end
 
-  def execute(plugin_name, settings = {})
+  def execute(plugin_name, settings = {}, trmnl_data = {})
     plugin_dir = @plugins_path.join(plugin_name)
     plugin_file = plugin_dir.join("#{plugin_name}.rb")
     
@@ -16,7 +16,7 @@ class PluginExecutorService
       plugin_code = File.read(plugin_file)
       
       # Execute the plugin in a safe environment
-      result = execute_plugin_code(plugin_code, plugin_name, settings)
+      result = execute_plugin_code(plugin_code, plugin_name, settings, trmnl_data)
       
       { success: true, data: result }
     rescue => e
@@ -27,12 +27,15 @@ class PluginExecutorService
 
   private
 
-  def execute_plugin_code(plugin_code, plugin_name, settings)
+  def execute_plugin_code(plugin_code, plugin_name, settings, trmnl_data)
     # Load the Base class first
     base_class_file = @plugins_path.join('base.rb')
     if File.exist?(base_class_file)
       base_code = File.read(base_class_file)
       eval(base_code)
+      
+      # Ensure Rails compatibility for templates
+      Base.ensure_rails_compatibility! if defined?(Base)
     end
     
     # Create a safe execution environment
@@ -59,7 +62,7 @@ class PluginExecutorService
     
     # Use the first matching plugin class
     plugin_class = plugin_classes.first
-    plugin_instance = plugin_class.new(settings)
+    plugin_instance = plugin_class.new(settings, trmnl_data)
     
     # Execute the plugin
     if plugin_instance.respond_to?(:locals)

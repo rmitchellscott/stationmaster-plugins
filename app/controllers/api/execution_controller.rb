@@ -3,19 +3,22 @@ class Api::ExecutionController < Api::BaseController
   include ActionController::Helpers
   def execute
     plugin_name = params[:name]
-    settings = params[:settings] || {}
+    settings = transform_checkbox_values(params[:settings] || {})
     layout = params[:layout] || 'full'
     trmnl_data = params[:trmnl] || {}
     
     begin
       # Execute plugin to get data
-      result = PluginExecutorService.new.execute(plugin_name, settings)
+      result = PluginExecutorService.new.execute(plugin_name, settings, trmnl_data)
       
       if result[:success]
         plugin_data = result[:data] || {}
         
         # Add TRMNL data to plugin data
         plugin_data['trmnl'] = trmnl_data
+        
+        # Add instance_name for template access
+        plugin_data['instance_name'] = trmnl_data.dig('plugin_settings', 'instance_name') || 'Plugin Instance'
         
         # Render ERB template with plugin data
         rendered_html = render_erb_template(plugin_name, layout, plugin_data)
@@ -41,6 +44,17 @@ class Api::ExecutionController < Api::BaseController
   end
   
   private
+  
+  # Transform boolean values to strings that Ruby plugins expect
+  def transform_checkbox_values(settings)
+    settings.transform_values do |value|
+      case value
+      when true then 'yes'
+      when false then 'no'
+      else value
+      end
+    end
+  end
   
   def render_erb_template(plugin_name, layout, data)
     # Map layout names to ERB template files
@@ -72,11 +86,41 @@ class Api::ExecutionController < Api::BaseController
       end
       
       # Add plugins directory to Rails view paths temporarily so partials can be found
-      # This allows 'plugins/mondrian/common' to resolve correctly  
-      plugins_parent_path = Rails.root.join('app').to_s
-      plugins_views_path = Rails.root.join('app', 'plugins').to_s
-      prepend_view_path(plugins_parent_path)
-      prepend_view_path(plugins_views_path)
+      # Problem: Templates call render 'plugins/plugin_name/partial_name'  
+      # Rails looks for: [VIEW_PATH]/plugins/plugin_name/_partial_name.html.erb
+      # Actual file is at: app/plugins/plugin_name/views/_partial_name.html.erb
+      
+      app_path = Rails.root.join('app').to_s
+      prepend_view_path(app_path)
+      
+      # Solution: Create a temporary directory structure that Rails can resolve
+      # We'll create symbolic links from plugins/plugin_name/* to plugins/plugin_name/views/*
+      plugins_dir = Rails.root.join('app', 'plugins')
+      
+      Dir.glob(plugins_dir.join('*')).each do |plugin_path|
+        next unless File.directory?(plugin_path)
+        
+        plugin_dir_name = File.basename(plugin_path)
+        views_dir = File.join(plugin_path, 'views')
+        
+        if Dir.exist?(views_dir)
+          # Create symlinks for each partial in the views directory to be accessible directly in plugin dir
+          Dir.glob(File.join(views_dir, '_*.html.erb')).each do |partial_path|
+            partial_name = File.basename(partial_path)
+            target_path = File.join(plugin_path, partial_name)
+            
+            # Create symlink if it doesn't exist
+            unless File.exist?(target_path)
+              begin
+                File.symlink(File.join('views', partial_name), target_path)
+                Rails.logger.debug "Created symlink: #{target_path} -> views/#{partial_name}"
+              rescue => e
+                Rails.logger.warn "Failed to create symlink for #{partial_name}: #{e.message}"
+              end
+            end
+          end
+        end
+      end
       
       template_path_to_render = "plugins/#{plugin_name}/views/#{template_file}"
       Rails.logger.info "Attempting to render template: #{template_path_to_render}"
@@ -87,8 +131,8 @@ class Api::ExecutionController < Api::BaseController
         Rails.logger.debug "About to render template: #{template_path_to_render}"
         Rails.logger.debug "Available view paths: #{view_paths.paths.map(&:to_s).join(', ')}"
         
-        
-        rendered_html = render_to_string(template_path_to_render, layout: false, formats: [:html])
+        # Pass plugin data as local variables to the ERB template
+        rendered_html = render_to_string(template_path_to_render, layout: false, formats: [:html], locals: data)
         Rails.logger.info "render_to_string succeeded"
         Rails.logger.debug "Raw render_to_string result: #{rendered_html.inspect}"
         Rails.logger.debug "render_to_string result class: #{rendered_html.class}"

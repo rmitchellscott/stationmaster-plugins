@@ -2,8 +2,9 @@ class Base
   # Base class for all plugins
   # Plugins should inherit from this and implement the `locals` method
   
-  def initialize(settings = {})
+  def initialize(settings = {}, trmnl_data = {})
     @settings = settings || {}
+    @trmnl_data = trmnl_data || {}
   end
   
   # Main method that should be implemented by plugins
@@ -35,7 +36,112 @@ class Base
     @settings[key.to_s] || @settings[key.to_sym] || default
   end
   
+  # User object providing timezone and datetime capabilities
+  def user
+    @user ||= UserProxy.new(@trmnl_data['user'] || {})
+  end
+  
+  # Plugin settings object providing metadata and created_at date
+  def plugin_settings
+    @plugin_settings ||= PluginSettingsProxy.new(@trmnl_data['plugin_settings'] || {})
+  end
+  
+  # Ensure Rails compatibility for templates
+  def self.ensure_rails_compatibility!
+    return if defined?(Rails) && Rails.respond_to?(:application)
+    
+    # Create minimal Rails mock for template compatibility
+    rails_mock = Struct.new(:application) do
+      def credentials
+        @credentials ||= Struct.new(:base_url, :plugins) do
+          def base_url
+            ENV['RAILS_BASE_URL'] || 'http://localhost:3000'
+          end
+          
+          def plugins
+            {}
+          end
+        end.new
+      end
+    end
+    
+    app_mock = Struct.new(:credentials) do
+      def credentials
+        @credentials ||= Struct.new(:base_url, :plugins) do
+          def base_url
+            ENV['RAILS_BASE_URL'] || 'http://localhost:3000'
+          end
+          
+          def plugins
+            {}
+          end
+        end.new
+      end
+    end
+    
+    Object.const_set(:Rails, rails_mock.new(app_mock.new)) unless defined?(Rails)
+  end
+  
   private
   
   attr_reader :settings
+  
+  # Proxy class to provide user datetime and timezone functionality
+  class UserProxy
+    def initialize(user_data)
+      @user_data = user_data
+    end
+    
+    # Get current datetime in user's timezone
+    def datetime_now
+      timezone = @user_data['time_zone_iana'] || 'UTC'
+      Time.current.in_time_zone(timezone)
+    end
+    
+    # Get user's timezone
+    def tz
+      @user_data['time_zone_iana'] || 'UTC'
+    end
+  end
+  
+  # Proxy class to provide plugin settings functionality
+  class PluginSettingsProxy
+    def initialize(plugin_settings_data)
+      @plugin_settings_data = plugin_settings_data
+    end
+    
+    # Get plugin instance creation date
+    def created_at
+      created_at_str = @plugin_settings_data['created_at']
+      return Time.current unless created_at_str
+      
+      Time.parse(created_at_str)
+    rescue ArgumentError
+      Time.current
+    end
+    
+    # Get plugin instance ID
+    def id
+      @plugin_settings_data['id']
+    end
+    
+    # Placeholder methods for OAuth plugins (to be implemented later)
+    def encrypted_settings
+      {}
+    end
+    
+    def settings
+      {}
+    end
+    
+    def update(attributes)
+      # No-op for now - OAuth plugins will need this later
+      Rails.logger.warn "PluginSettingsProxy#update called but not implemented for external plugins"
+    end
+    
+    def refresh_in_24hr
+      # No-op for now - caching strategy for OAuth plugins
+      Rails.logger.warn "PluginSettingsProxy#refresh_in_24hr called but not implemented for external plugins"
+    end
+  end
 end
