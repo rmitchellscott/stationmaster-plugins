@@ -19,7 +19,7 @@ jobs:
           - platform: linux/amd64
             runs-on: ubuntu-latest
           - platform: linux/arm64/v8
-            runs-on: ubuntu-latest-arm64
+            runs-on: ubuntu-latest-arm
     runs-on: ${{ matrix.runs-on }}
     permissions:
       contents: read
