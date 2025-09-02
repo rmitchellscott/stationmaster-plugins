@@ -64,8 +64,8 @@ class PluginExecutorService
     plugin_class = plugin_classes.first
     plugin_instance = plugin_class.new(settings, trmnl_data)
     
-    # Execute the plugin
-    if plugin_instance.respond_to?(:locals)
+    # Execute the plugin and capture result
+    result = if plugin_instance.respond_to?(:locals)
       # Plugin returns locals data directly (new format)
       plugin_instance.locals
     elsif plugin_instance.respond_to?(:execute)
@@ -77,6 +77,11 @@ class PluginExecutorService
     else
       raise "Plugin class must implement 'locals', 'execute', or 'call' method"
     end
+    
+    # Aggressive cleanup after plugin execution
+    cleanup_plugin_memory(plugin_module, plugin_instance, plugin_class)
+    
+    result
   end
 
   def find_plugin_classes(plugin_module, expected_name)
@@ -114,5 +119,41 @@ class PluginExecutorService
     end
     
     classes
+  end
+
+  def cleanup_plugin_memory(plugin_module, plugin_instance, plugin_class)
+    # Clear instance variables from plugin instance
+    plugin_instance.instance_variables.each do |var|
+      plugin_instance.remove_instance_variable(var)
+    end
+    
+    # Remove constants from plugin module to free memory
+    plugin_module.constants.each do |const_name|
+      begin
+        plugin_module.send(:remove_const, const_name)
+      rescue NameError
+        # Constant may have been removed already, ignore
+      end
+    end
+    
+    # Clean up global Plugins module if classes were added there
+    if defined?(Plugins)
+      Plugins.constants.each do |const_name|
+        const = Plugins.const_get(const_name)
+        if const.is_a?(Class) && const == plugin_class
+          begin
+            Plugins.send(:remove_const, const_name)
+          rescue NameError
+            # Constant may have been removed already, ignore
+          end
+        end
+      end
+    end
+    
+    # Force garbage collection to immediately reclaim memory
+    GC.start
+  rescue => e
+    Rails.logger.warn "Plugin cleanup failed: #{e.message}"
+    # Continue execution even if cleanup fails
   end
 end

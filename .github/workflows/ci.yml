@@ -113,11 +113,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Get SHA for platform images
+        id: sha_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/rmitchellscott/stationmaster-plugins
+          flavor: |
+            suffix=-amd64
+          tags: |
+            type=sha
+
       - name: Create Multi-Arch Manifest
         run: |
+          # Extract base SHA tag (without platform suffix)
+          SHA_TAG=$(echo "${{ steps.sha_meta.outputs.tags }}" | sed 's/-amd64$//')
+          
           # Create multi-arch manifests for each tag
-          for tag in ${{ steps.meta.outputs.tags }}; do
-            docker buildx imagetools create -t "${tag}" \
-              "ghcr.io/rmitchellscott/stationmaster-plugins:${{ github.sha }}-linux/amd64" \
-              "ghcr.io/rmitchellscott/stationmaster-plugins:${{ github.sha }}-linux/arm64/v8"
+          echo "${{ steps.meta.outputs.tags }}" | while read -r tag; do
+            [[ -n "$tag" ]] && docker buildx imagetools create -t "${tag}" \
+              "${SHA_TAG}-amd64" \
+              "${SHA_TAG}-arm64"
           done
