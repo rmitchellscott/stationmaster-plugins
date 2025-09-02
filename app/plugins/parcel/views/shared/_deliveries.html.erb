@@ -15,7 +15,7 @@
             <span class="label"><%= t('renders.parcel.empty', locale:) %></span>
         </div>
     <% else %>
-        <%= render partial: "plugins/parcel/shared/delivery", collection: deliveries, locals: { style: } %>
+        <%= render partial: "plugins/parcel/views/shared/delivery", collection: deliveries, locals: { style: } %>
     <% end %>
     </div>
 </div>
