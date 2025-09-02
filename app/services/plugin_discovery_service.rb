@@ -49,12 +49,12 @@ class PluginDiscoveryService
     template_files = discover_templates(plugin_dir)
     
     {
-      name: name.humanize,
+      name: name.humanize.titleize,
       description: extract_description(plugin_content),
       author: "TRMNL",
       version: "1.0.0",
       templates: template_files,
-      form_fields: extract_form_fields(plugin_content),
+      form_fields: extract_form_fields_with_yaml_fallback(plugin_dir, plugin_content),
       enabled: true
     }
   end
@@ -68,6 +68,24 @@ class PluginDiscoveryService
     else
       "Plugin description not available"
     end
+  end
+
+  def extract_form_fields_with_yaml_fallback(plugin_dir, content)
+    # Check for existing form_fields.yaml file first
+    form_fields_file = File.join(plugin_dir, 'form_fields.yaml')
+    
+    if File.exist?(form_fields_file)
+      begin
+        yaml_content = File.read(form_fields_file)
+        return { 'yaml' => yaml_content }
+      rescue => e
+        Rails.logger.warn "Failed to read form_fields.yaml for #{File.basename(plugin_dir)}: #{e.message}"
+        # Fall back to code analysis if YAML file is invalid
+      end
+    end
+    
+    # Fall back to code analysis
+    extract_form_fields(content)
   end
 
   def extract_form_fields(content)
