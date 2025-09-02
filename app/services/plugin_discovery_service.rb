@@ -39,6 +39,13 @@ class PluginDiscoveryService
 
     # Read and analyze the plugin file to extract metadata
     plugin_content = File.read(plugin_file)
+    
+    # Check if plugin requires credentials that aren't available
+    if requires_unavailable_credentials?(plugin_content, name)
+      Rails.logger.warn "Skipping #{name} plugin: required credentials not configured"
+      return nil
+    end
+    
     template_files = discover_templates(plugin_dir)
     
     {
@@ -240,6 +247,100 @@ class PluginDiscoveryService
       return true
     end
     
+    false
+  end
+
+  def requires_unavailable_credentials?(plugin_content, plugin_name)
+    # Extract credential references from the plugin code
+    required_creds = extract_credential_requirements(plugin_content, plugin_name)
+    
+    return false if required_creds.empty?
+    
+    # Check if any required credentials are missing
+    required_creds.any? { |cred| !credential_available?(cred) }
+  end
+
+  def extract_credential_requirements(content, plugin_name)
+    credentials = []
+    
+    # Pattern 1: Rails.application.credentials.plugins[:service][:key]
+    # Used for OAuth credentials like client_id, client_secret
+    oauth_matches = content.scan(/Rails\.application\.credentials\.plugins\[:(\w+)\]\[:(\w+)\]/)
+    oauth_matches.each do |service, key|
+      credentials << { type: :oauth, service: service.to_sym, key: key.to_sym }
+    end
+    
+    # Pattern 2: Rails.application.credentials.plugins[:service] (direct API key)
+    # Used for simple API keys like marketdata_app, currency_api
+    api_key_matches = content.scan(/Rails\.application\.credentials\.plugins\[:(\w+)\](?!\[)/)
+    api_key_matches.each do |service_match|
+      service = service_match.first
+      credentials << { type: :api_key, service: service.to_sym }
+    end
+    
+    # Pattern 3: Rails.application.credentials.plugins.dig(:service)
+    # Alternative way to access credentials
+    dig_matches = content.scan(/Rails\.application\.credentials\.plugins(?:&)?\.dig\(:(\w+)\)/)
+    dig_matches.each do |service_match|
+      service = service_match.first
+      credentials << { type: :api_key, service: service.to_sym }
+    end
+    
+    # Pattern 4 (check nested BEFORE simple): Rails.application.credentials.plugins.service.key (nested dot notation)  
+    # Used for OAuth-like credentials like full_calendar.license_key
+    nested_dot_matches = content.scan(/Rails\.application\.credentials\.plugins\.(\w+)\.(\w+)/)
+    nested_dot_matches.each do |service, key|
+      credentials << { type: :oauth, service: service.to_sym, key: key.to_sym }
+    end
+    
+    # Pattern 5 (check simple AFTER nested): Rails.application.credentials.plugins.service_name (dot notation)
+    # Used for simple API keys like github_commit_graph_token, currency_api
+    # Fixed regex: now properly matches single-level credentials with underscores
+    dot_notation_matches = content.scan(/Rails\.application\.credentials\.plugins\.([a-z_]+)(?!\.\w)/)
+    dot_notation_matches.each do |service_match|
+      service = service_match.first
+      credentials << { type: :api_key, service: service.to_sym }
+    end
+    
+    credentials.uniq
+  rescue => e
+    Rails.logger.warn "Failed to extract credential requirements for #{plugin_name}: #{e.message}"
+    []
+  end
+
+  def credential_available?(cred_info)
+    # Check if Rails credentials are configured
+    return false unless Rails.application.credentials.respond_to?(:plugins)
+    
+    creds = Rails.application.credentials.plugins
+    return false unless creds
+    
+    case cred_info[:type]
+    when :oauth
+      if cred_info[:key]
+        # OAuth credentials with specific keys like client_id, client_secret
+        service_creds = creds[cred_info[:service]]
+        return false unless service_creds
+        service_creds.is_a?(Hash) && service_creds[cred_info[:key]].present?
+      else
+        # This shouldn't happen for OAuth, but handle gracefully
+        false
+      end
+    when :api_key
+      # Check if credential exists using dot notation access pattern
+      if creds.respond_to?(cred_info[:service])
+        credential_value = creds.public_send(cred_info[:service])
+        credential_value.present?
+      else
+        # Fallback to hash access for bracket notation patterns
+        service_creds = creds[cred_info[:service]]
+        service_creds.present? && (service_creds.is_a?(String) || service_creds.is_a?(Hash))
+      end
+    else
+      false
+    end
+  rescue => e
+    Rails.logger.warn "Failed to check credential availability for #{cred_info}: #{e.message}"
     false
   end
 end
