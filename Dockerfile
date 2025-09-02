@@ -2,6 +2,9 @@
 # check=error=true
 
 ARG RUBY_VERSION=3.4.5
+
+FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
+
 FROM docker.io/library/ruby:$RUBY_VERSION-alpine AS base
 
 WORKDIR /rails
@@ -14,9 +17,16 @@ ENV RAILS_ENV="production" \
     BUNDLE_WITHOUT="development" \
     PATH="/rails/bin:$PATH"
 
-FROM base AS build
+FROM --platform=$BUILDPLATFORM base AS build
 
-RUN apk add --no-cache build-base git yaml-dev
+# Copy xx cross-compilation helpers
+COPY --from=xx / /
+
+# Set target platform for cross-compilation
+ARG TARGETPLATFORM
+
+# Install cross-compilation tools and dependencies
+RUN xx-apk add --no-cache build-base git yaml-dev
 
 COPY Gemfile Gemfile.lock ./
 RUN bundle install && \
