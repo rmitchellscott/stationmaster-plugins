@@ -2,24 +2,21 @@
 # check=error=true
 
 ARG RUBY_VERSION=3.4.5
-FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
+FROM docker.io/library/ruby:$RUBY_VERSION-alpine AS base
 
 WORKDIR /rails
 
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+RUN apk add --no-cache curl jemalloc
 
 ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
-    BUNDLE_WITHOUT="development"
+    BUNDLE_WITHOUT="development" \
+    PATH="/rails/bin:$PATH"
 
 FROM base AS build
 
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential git libyaml-dev pkg-config && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+RUN apk add --no-cache build-base git yaml-dev
 
 COPY Gemfile Gemfile.lock ./
 RUN bundle install && \
@@ -36,12 +33,15 @@ FROM base
 COPY --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
 COPY --from=build /rails /rails
 
-RUN groupadd --system --gid 1000 rails && \
-    useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash && \
-    chown -R rails:rails log tmp
+RUN addgroup -g 1000 -S rails && \
+    adduser -u 1000 -S -G rails -h /home/rails -s /bin/sh rails && \
+    chown -R rails:rails /rails && \
+    chmod +x /rails/bin/*
 USER 1000:1000
+
+WORKDIR /rails
 
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]
 
 EXPOSE 80
-CMD ["./bin/thrust", "./bin/rails", "server"]
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]
