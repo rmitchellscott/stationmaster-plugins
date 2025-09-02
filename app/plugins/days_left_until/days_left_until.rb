@@ -1,6 +1,6 @@
 module Plugins
   class DaysLeftUntil < Base
-
+  # Description: Arbitrary countdown clock
     def locals
       { days_passed:, days_left:, percent_passed:, show_days_passed:, show_days_left:, message: }
     end

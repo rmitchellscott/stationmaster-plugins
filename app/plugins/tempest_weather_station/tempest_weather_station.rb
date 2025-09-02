@@ -1,6 +1,6 @@
 module Plugins
   class TempestWeatherStation < Base
-
+   # Description: Home weather system
     BASE_URL = 'https://swd.weatherflow.com/swd/rest'.freeze
 
     def locals

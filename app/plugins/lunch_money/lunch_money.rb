@@ -1,6 +1,6 @@
 module Plugins
   class LunchMoney < Base
-
+   # Description: Personal finances dashboard
     BASE_URL = 'https://dev.lunchmoney.app/v1'.freeze
 
     def locals

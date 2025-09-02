@@ -36,6 +36,9 @@ RUN bundle install && \
 # Copy application code
 COPY . .
 
+# Download and transform SEC ticker data
+RUN ./bin/download-ticker-data
+
 RUN bundle exec bootsnap precompile app/ lib/
 
 FROM base

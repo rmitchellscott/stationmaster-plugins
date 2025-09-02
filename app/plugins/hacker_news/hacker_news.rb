@@ -1,6 +1,6 @@
 module Plugins
   class HackerNews < Base
-
+  # Description: Trending technology content
     STORY_COUNT = 14.freeze
 
     STORY_TYPES = {

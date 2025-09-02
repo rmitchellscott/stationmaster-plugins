@@ -1,6 +1,6 @@
 module Plugins
   class LunarCalendar < Base
-
+  # Description: Track lunar phases and moon cycles
     MOON_PHASES = [
       { name: "New Moon", keyname: 'new_moon', icon: "wi-moon-alt-new", age_range: 0..1, phase_order: 1 },
       { name: "Waxing Crescent", keyname: 'waxing_crescent', icon: "wi-moon-alt-waxing-crescent-3", age_range: 1..7, phase_order: 2 },

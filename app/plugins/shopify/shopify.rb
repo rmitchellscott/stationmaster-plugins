@@ -1,6 +1,7 @@
 module Plugins
   class Shopify < Base
-
+  # Description: Shopify store sales dashboard
+  
     def locals
       { metrics:, histogram:, currency:, comparison_period: comparison_period.map { it.to_date.to_s } }
     end

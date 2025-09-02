@@ -40,26 +40,29 @@ class Api::ExecutionController < Api::BaseController
           # Return rendered HTML as plain text
           render plain: rendered_html
         else
-          render json: { error: "Template rendering failed - no template found for layout: #{layout}" }, status: :unprocessable_entity
+          render json: { error: "Template rendering failed - no template found for layout: #{layout}" }, status: :unprocessable_content, formats: [:json]
         end
       else
-        # Plugin execution failed
-        render json: { error: result[:error] || "Plugin execution failed" }, status: :unprocessable_entity
+        # Plugin execution failed - force JSON format for error response
+        render json: { error: result[:error] || "Plugin execution failed" }, status: :unprocessable_content, formats: [:json]
       end
       
     rescue => e
       Rails.logger.error "Plugin execution failed for #{plugin_name}: #{e.message}"
       Rails.logger.error e.backtrace.join("\n")
       
-      # Simple error response
-      render json: { error: "Plugin execution failed: #{e.message}" }, status: :internal_server_error
+      # Simple error response - force JSON format
+      render json: { error: "Plugin execution failed: #{e.message}" }, status: :internal_server_error, formats: [:json]
     end
   end
   
   private
   
   def set_api_headers
-    response.headers['Content-Type'] = 'application/json' unless params[:action] == 'execute' && request.format == :html
+    # Set JSON content type for error responses, but allow HTML for successful template rendering
+    unless params[:action] == 'execute' && request.format == :html
+      response.headers['Content-Type'] = 'application/json'
+    end
   end
   
   # Transform boolean values to strings that Ruby plugins expect
@@ -127,12 +130,25 @@ class Api::ExecutionController < Api::BaseController
       ActionView::Base.include(helper_module)
       
       # Add plugins directory to Rails view paths temporarily so partials can be found
-      # Problem: Templates call render 'plugins/plugin_name/partial_name'  
+      # Problem: Templates call render 'plugins/plugin_name/partial_name' or 'lib/plugin_name/views/shared/partial_name'
       # Rails looks for: [VIEW_PATH]/plugins/plugin_name/_partial_name.html.erb
       # Actual file is at: app/plugins/plugin_name/views/_partial_name.html.erb
       
       app_path = Rails.root.join('app').to_s
       prepend_view_path(app_path)
+      
+      # Also create lib symlink to plugins for templates that expect lib/ paths
+      lib_path = Rails.root.join('app', 'lib')
+      plugins_path = Rails.root.join('app', 'plugins')
+      
+      unless File.exist?(lib_path)
+        begin
+          File.symlink(plugins_path.to_s, lib_path.to_s)
+          Rails.logger.debug "Created symlink: #{lib_path} -> #{plugins_path}"
+        rescue => e
+          Rails.logger.warn "Failed to create lib->plugins symlink: #{e.message}"
+        end
+      end
       
       # Solution: Create a temporary directory structure that Rails can resolve
       # We'll create symbolic links from plugins/plugin_name/* to plugins/plugin_name/views/*

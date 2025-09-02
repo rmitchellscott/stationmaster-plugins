@@ -51,11 +51,68 @@ module StationmasterPlugins
         Rails.application.credentials.define_singleton_method(:base_url) { ENV['RAILS_BASE_URL'] }
       end
       
-      # Configure GitHub API token from environment variable
-      if ENV['GITHUB_API_TOKEN']
-        # Create nested credentials structure for plugins.github_commit_graph_token
-        plugins_credentials = Struct.new(:github_commit_graph_token).new(ENV['GITHUB_API_TOKEN'])
-        Rails.application.credentials.define_singleton_method(:plugins) { plugins_credentials }
+      # Configure API tokens from environment variables with independent fallbacks
+      if ENV['GITHUB_API_TOKEN'] || ENV['MARKETDATA_API_TOKEN'] || ENV['CURRENCY_API_KEY']
+        # Create a simple Struct with dynamic field population that falls back to encrypted credentials
+        plugins_struct = Struct.new(:github_commit_graph_token, :marketdata_app, :currency_api, :google, :full_calendar) do
+          # Override field accessors to support environment variable fallbacks
+          def github_commit_graph_token
+            ENV['GITHUB_API_TOKEN'] || (original_plugins&.github_commit_graph_token rescue nil)
+          end
+          
+          def marketdata_app
+            token = ENV['MARKETDATA_API_TOKEN'] || (original_plugins&.[](:marketdata_app) rescue nil)
+            Rails.logger.debug "marketdata_app token: #{token ? 'present' : 'nil'} (env: #{ENV['MARKETDATA_API_TOKEN'] ? 'present' : 'nil'})"
+            token
+          end
+          
+          def currency_api  
+            key = ENV['CURRENCY_API_KEY'] || (original_plugins&.currency_api rescue nil)
+            Rails.logger.debug "currency_api key: #{key ? 'present' : 'nil'} (env: #{ENV['CURRENCY_API_KEY'] ? 'present' : 'nil'})"
+            key
+          end
+          
+          def google
+            # Return original google credentials (no env var override for nested OAuth)
+            original_plugins&.[](:google) rescue nil
+          end
+          
+          def full_calendar
+            # Return original full_calendar credentials (no env var override for nested)
+            original_plugins&.full_calendar rescue nil
+          end
+          
+          # Support bracket notation access
+          def [](key)
+            case key.to_s
+            when 'github_commit_graph_token'
+              github_commit_graph_token
+            when 'marketdata_app'
+              marketdata_app
+            when 'currency_api'
+              currency_api
+            when 'google'
+              google
+            when 'full_calendar'
+              full_calendar
+            else
+              original_plugins&.[](key) rescue nil
+            end
+          end
+          
+          private
+          
+          def original_plugins
+            @original_plugins ||= begin
+              # Capture original plugins credentials at runtime to avoid timing issues
+              Rails.application.credentials.instance_variable_get(:@config)&.[](:plugins)
+            rescue
+              nil
+            end
+          end
+        end.new
+        
+        Rails.application.credentials.define_singleton_method(:plugins) { plugins_struct }
       end
     end
   end

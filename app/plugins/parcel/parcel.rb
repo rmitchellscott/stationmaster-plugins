@@ -1,6 +1,7 @@
 module Plugins
   class Parcel < Base
-
+  # Description: Package tracking
+  
     # maps Parcel status codes to I18n keys "renders.parcel.status.{status_key}"
     # (fall back to 'renders.parcel.status.unknown')
     STATUS_KEYS = {

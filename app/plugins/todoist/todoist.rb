@@ -1,6 +1,6 @@
 module Plugins
   class Todoist < Base
-
+    # Description: Todo list management app
     LEGACY_TASKS_URL = 'https://api.todoist.com/rest/v2/tasks'.freeze
     TASKS_URL = 'https://api.todoist.com/api/v1/tasks/filter'.freeze
 

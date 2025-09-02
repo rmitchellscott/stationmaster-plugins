@@ -21,6 +21,49 @@ class Base
     nil
   end
   
+  # HTTP fetch method used by plugins
+  def fetch(url, headers: {}, timeout: 30, query: {}, should_retry: true)
+    options = {
+      headers: headers,
+      timeout: timeout,
+      query: query
+    }
+    
+    retries = should_retry ? 3 : 0
+    attempt = 0
+    
+    begin
+      response = HTTParty.get(url, options)
+      
+      # Handle nil response
+      if response.nil?
+        Rails.logger.error "API call to #{url} returned nil response"
+        return create_error_response("API returned nil response")
+      end
+      
+      # Log complete API response for debugging
+      Rails.logger.info "=== API Response for #{url} ==="
+      Rails.logger.info "Response code: #{response.code rescue 'unknown'}"
+      Rails.logger.info "Response headers: #{response.headers.inspect rescue 'unknown'}"
+      Rails.logger.info "Response body: #{response.body.inspect rescue 'unknown'}"
+      Rails.logger.info "Parsed response: #{response.parsed_response.inspect rescue 'unknown'}"
+      Rails.logger.info "=== End API Response ==="
+      
+      response
+      
+    rescue => e
+      attempt += 1
+      if attempt <= retries
+        Rails.logger.warn "HTTP request failed (attempt #{attempt}/#{retries + 1}): #{e.message}"
+        sleep(attempt * 0.5) # exponential backoff
+        retry
+      else
+        Rails.logger.error "Failed to fetch from #{url} after #{attempt} attempts: #{e.message}"
+        return create_error_response("HTTP request failed: #{e.message}")
+      end
+    end
+  end
+  
   # Helper method for getting current time
   def current_time
     Time.current
@@ -44,6 +87,11 @@ class Base
   # Plugin settings object providing metadata and created_at date
   def plugin_settings
     @plugin_settings ||= PluginSettingsProxy.new(@trmnl_data['plugin_settings'] || {})
+  end
+  
+  # Plugin metadata object providing access to form fields
+  def plugin
+    @plugin ||= PluginProxy.new(self.class.name.demodulize.underscore)
   end
   
   # Helper method for accessing user locale
@@ -97,7 +145,33 @@ class Base
     Object.const_set(:Rails, rails_mock.new(app_mock.new)) unless defined?(Rails)
   end
   
+  # Helper method to convert comma-separated string to array with optional limit
+  def string_to_array(string, limit: nil)
+    return [] if string.nil? || string.empty?
+    
+    array = string.split(',').map(&:strip).reject(&:empty?)
+    limit ? array.first(limit) : array
+  end
+  
+  # Helper method to convert line-separated string to array  
+  def line_separated_string_to_array(string)
+    return [] if string.nil? || string.empty?
+    
+    string.split(/[\r\n]+/).map(&:strip).reject(&:empty?)
+  end
+
   private
+  
+  # Create a consistent error response structure for failed API calls
+  def create_error_response(error_message)
+    # Return a mock HTTParty response-like object that Stock Price plugin can handle
+    OpenStruct.new(
+      code: 500,
+      body: nil,
+      parsed_response: { 's' => 'error', 'errmsg' => error_message },
+      '[]' => ->(key) { parsed_response[key] }
+    )
+  end
   
   attr_reader :settings
   
@@ -162,6 +236,46 @@ class Base
     def refresh_in_24hr
       # No-op for now - caching strategy for OAuth plugins
       Rails.logger.warn "PluginSettingsProxy#refresh_in_24hr called but not implemented for external plugins"
+    end
+  end
+  
+  # Proxy class to provide plugin metadata functionality
+  class PluginProxy
+    def initialize(plugin_name)
+      @plugin_name = plugin_name
+    end
+    
+    # Get plugin form fields from form_fields.yaml
+    def account_fields
+      @account_fields ||= begin
+        form_fields_path = Rails.root.join('app', 'plugins', @plugin_name, 'form_fields.yaml')
+        
+        if File.exist?(form_fields_path)
+          fields = YAML.load_file(form_fields_path) || []
+          
+          # Transform select field options to extract just the values
+          fields.each do |field|
+            if field['field_type'] == 'select' && field['options'].is_a?(Array)
+              field['options'] = field['options'].map do |option|
+                if option.is_a?(Hash)
+                  # Extract just the values from hash options like {"US Dollar (USD)" => "USD"}
+                  option.values.first
+                else
+                  option
+                end
+              end
+            end
+          end
+          
+          fields
+        else
+          Rails.logger.warn "No form_fields.yaml found for plugin: #{@plugin_name}"
+          []
+        end
+      rescue => e
+        Rails.logger.error "Error loading form fields for #{@plugin_name}: #{e.message}"
+        []
+      end
     end
   end
 end

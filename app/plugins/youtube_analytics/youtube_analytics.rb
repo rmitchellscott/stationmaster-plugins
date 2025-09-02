@@ -1,5 +1,7 @@
 module Plugins
   class YoutubeAnalytics < Base
+
+    # Description: Channel and video analytics
     def locals
       { metrics: }
     end

@@ -1,5 +1,6 @@
 module Plugins
   class GithubCommitGraph < Base
+  # Description: Flex your coding frequency
     def locals
       { username:, contributions:, stats: }
     end

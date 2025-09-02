@@ -1,5 +1,6 @@
 module Plugins
   class StockPrice < Base
+    # Description: Stock, Metal & Index prices
     TICKER_NAME_DATA = JSON.parse(File.read("db/data/ticker-name.json"))
     STOCK_TICKER_LIMIT = 12.freeze
 

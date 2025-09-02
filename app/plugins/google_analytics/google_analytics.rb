@@ -2,7 +2,7 @@ require 'google/apis/analyticsdata_v1beta'
 
 module Plugins
   class GoogleAnalytics < Base
-
+  # Description: Free Web analytics
     def locals
       { histogram:, metrics: }
     end
