@@ -1,5 +1,5 @@
 module Calendar
-  module Helper
+  module Helpers
     # rubocop:disable Lint/DuplicateBranch
     def cutoff_time
       case [event_layout, include_past_event?]

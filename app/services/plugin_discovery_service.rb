@@ -48,7 +48,7 @@ class PluginDiscoveryService
     
     template_files = discover_templates(plugin_dir)
     
-    {
+    metadata = {
       name: name.humanize.titleize,
       description: extract_description(plugin_content),
       author: "TRMNL",
@@ -57,6 +57,12 @@ class PluginDiscoveryService
       form_fields: extract_form_fields_with_yaml_fallback(plugin_dir, plugin_content),
       enabled: true
     }
+    
+    # Add OAuth configuration if plugin supports it
+    oauth_config = extract_oauth_config(plugin_content, name)
+    metadata[:oauth_config] = oauth_config if oauth_config
+    
+    metadata
   end
 
   def extract_description(content)
@@ -327,6 +333,22 @@ class PluginDiscoveryService
   end
 
   def credential_available?(cred_info)
+    # First try Rails credentials system
+    rails_available = check_rails_credentials(cred_info)
+    
+    # If Rails credentials work, use them
+    return true if rails_available
+    
+    # Fallback to direct environment variable checks
+    check_environment_variables(cred_info)
+  rescue => e
+    Rails.logger.warn "Failed to check credential availability for #{cred_info}: #{e.message}"
+    false
+  end
+  
+  private
+  
+  def check_rails_credentials(cred_info)
     # Check if Rails credentials are configured
     return false unless Rails.application.credentials.respond_to?(:plugins)
     
@@ -358,7 +380,164 @@ class PluginDiscoveryService
       false
     end
   rescue => e
-    Rails.logger.warn "Failed to check credential availability for #{cred_info}: #{e.message}"
+    # If Rails credentials fail, we'll try environment variables
     false
+  end
+  
+  def check_environment_variables(cred_info)
+    case cred_info[:type]
+    when :oauth
+      case cred_info[:service]
+      when :google
+        # Check Google OAuth credentials
+        case cred_info[:key]
+        when :client_id
+          ENV['GOOGLE_CLIENT_ID'].present?
+        when :client_secret  
+          ENV['GOOGLE_CLIENT_SECRET'].present?
+        else
+          false
+        end
+      when :todoist
+        # Check Todoist OAuth credentials
+        case cred_info[:key]
+        when :client_id
+          ENV['TODOIST_CLIENT_ID'].present?
+        when :client_secret
+          ENV['TODOIST_CLIENT_SECRET'].present?
+        else
+          false
+        end
+      else
+        false
+      end
+    when :api_key
+      case cred_info[:service]
+      when :github_commit_graph_token
+        ENV['GITHUB_API_TOKEN'].present?
+      when :currency_api
+        ENV['CURRENCY_API_KEY'].present?
+      when :marketdata_app
+        ENV['MARKETDATA_API_TOKEN'].present?
+      else
+        false
+      end
+    else
+      false
+    end
+  end
+  
+  def extract_oauth_config(content, plugin_name)
+    # Look for OAuth configuration patterns in plugin class methods
+    
+    # Check for client_options method which contains OAuth config
+    client_options_match = content.match(/def\s+client_options\s*\n(.*?)\n\s*end/m)
+    return nil unless client_options_match
+    
+    client_options_content = client_options_match[1]
+    
+    # Extract OAuth configuration from client_options hash
+    oauth_config = {}
+    
+    # Extract authorization URI
+    if auth_uri_match = client_options_content.match(/authorization_uri:\s*['"]([^'"]+)['"]/)
+      oauth_config['auth_url'] = auth_uri_match[1]
+    end
+    
+    # Extract token credential URI
+    if token_uri_match = client_options_content.match(/token_credential_uri:\s*['"]([^'"]+)['"]/)
+      oauth_config['token_url'] = token_uri_match[1]
+    end
+    
+    # Extract scopes - handle both array and single scope formats
+    if scope_match = client_options_content.match(/scope:\s*\[(.*?)\]/m)
+      # Array format: scope: [Google::Apis::AnalyticsdataV1beta::AUTH_ANALYTICS_READONLY]
+      scope_content = scope_match[1].strip
+      if scope_content.include?('::AUTH_')
+        # Extract scope constant and map to actual scope string
+        scopes = extract_google_scopes(scope_content)
+      else
+        # Handle quoted string scopes: scope: ["data:read", "data:write"] 
+        scopes = scope_content.scan(/['"]([^'"]+)['"]/).flatten
+      end
+      oauth_config['scopes'] = scopes
+    elsif scope_match = client_options_content.match(/scope:\s*['"]([^'"]+)['"]/)
+      # Single scope format: scope: "data:read"
+      oauth_config['scopes'] = [scope_match[1]]
+    end
+    
+    # Determine provider based on OAuth URLs or plugin name
+    provider = determine_oauth_provider(oauth_config['auth_url'], plugin_name)
+    return nil unless provider
+    
+    oauth_config['provider'] = provider
+    
+    # Include actual credentials from environment variables
+    case provider
+    when 'google'
+      client_id = ENV['GOOGLE_CLIENT_ID']
+      client_secret = ENV['GOOGLE_CLIENT_SECRET']
+      
+      if client_id.present? && client_secret.present?
+        oauth_config['client_id'] = client_id
+        oauth_config['client_secret'] = client_secret
+      else
+        Rails.logger.warn "Google OAuth credentials not found in environment variables for #{plugin_name}"
+        return nil
+      end
+    when 'todoist'
+      client_id = ENV['TODOIST_CLIENT_ID']
+      client_secret = ENV['TODOIST_CLIENT_SECRET']
+      
+      if client_id.present? && client_secret.present?
+        oauth_config['client_id'] = client_id
+        oauth_config['client_secret'] = client_secret
+      else
+        Rails.logger.warn "Todoist OAuth credentials not found in environment variables for #{plugin_name}"
+        return nil
+      end
+    else
+      Rails.logger.warn "Unknown OAuth provider: #{provider} for plugin #{plugin_name}"
+      return nil # Unknown provider
+    end
+    
+    oauth_config
+  rescue => e
+    Rails.logger.warn "Failed to extract OAuth config from #{plugin_name}: #{e.message}"
+    nil
+  end
+  
+  def extract_google_scopes(scope_content)
+    # Map Google API scope constants to actual scope URLs
+    scope_mapping = {
+      'AUTH_ANALYTICS_READONLY' => 'https://www.googleapis.com/auth/analytics.readonly',
+      'AUTH_YT_ANALYTICS_READONLY' => 'https://www.googleapis.com/auth/yt-analytics.readonly'
+    }
+    
+    scopes = []
+    scope_mapping.each do |constant, scope_url|
+      if scope_content.include?(constant)
+        scopes << scope_url
+      end
+    end
+    
+    scopes
+  end
+  
+  def determine_oauth_provider(auth_url, plugin_name)
+    return nil unless auth_url
+    
+    case auth_url
+    when /accounts\.google\.com/
+      'google'
+    when /todoist\.com/
+      'todoist'
+    when /github\.com/
+      'github'
+    when /shopify/
+      'shopify'
+    else
+      nil
+    end
   end
 end

@@ -28,8 +28,10 @@ ARG TARGETPLATFORM
 # Install cross-compilation tools and dependencies
 RUN xx-apk add --no-cache build-base git yaml-dev
 
-COPY Gemfile Gemfile.lock ./
-RUN bundle install && \
+COPY Gemfile ./
+COPY Gemfile.loc[k] ./
+RUN bundle config set --local deployment false && \
+    bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
     bundle exec bootsnap precompile --gemfile
 
