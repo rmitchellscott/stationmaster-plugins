@@ -169,6 +169,22 @@ class Base
     time.strftime(format)
   end
   
+  # Helper method for formatting numbers with commas
+  def format_number(number)
+    return "0" if number.nil?
+    
+    # Convert to integer or float as appropriate
+    num = number.is_a?(String) ? number.to_f : number
+    
+    # Handle decimals - if it's a whole number, format as integer
+    if num == num.to_i
+      num.to_i.to_s.gsub(/(\d)(?=(\d{3})+(?!\d))/, '\1,')
+    else
+      # Format with 2 decimal places and add commas
+      ("%.2f" % num).gsub(/(\d)(?=(\d{3})+\.)/, '\1,')
+    end
+  end
+  
   # Helper method for accessing settings
   def setting(key, default = nil)
     @settings[key.to_s] || @settings[key.to_sym] || default

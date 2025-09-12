@@ -124,6 +124,21 @@ class Api::ExecutionController < Api::BaseController
             'bg-black'      # High activity (20+)
           end
         end
+        
+        def format_number(number)
+          return "0" if number.nil?
+          
+          # Convert to integer or float as appropriate
+          num = number.is_a?(String) ? number.to_f : number
+          
+          # Handle decimals - if it's a whole number, format as integer
+          if num == num.to_i
+            num.to_i.to_s.gsub(/(\d)(?=(\d{3})+(?!\d))/, '\1,')
+          else
+            # Format with 2 decimal places and add commas
+            ("%.2f" % num).gsub(/(\d)(?=(\d{3})+\.)/, '\1,')
+          end
+        end
       end
       
       # Include helper methods in ActionView::Base so they're available to render_to_string
