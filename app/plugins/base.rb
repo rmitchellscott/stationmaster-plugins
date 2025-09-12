@@ -56,10 +56,9 @@ class Base
     def self.refresh_google_token(refresh_token)
       require 'signet/oauth_2/client'
       
-      credentials = Rails.application.credentials.plugins[:google]
       client = Signet::OAuth2::Client.new(
-        client_id: credentials[:client_id],
-        client_secret: credentials[:client_secret],
+        client_id: ENV['GOOGLE_CLIENT_ID'],
+        client_secret: ENV['GOOGLE_CLIENT_SECRET'],
         token_credential_uri: 'https://accounts.google.com/o/oauth2/token',
         refresh_token: refresh_token
       )
@@ -71,12 +70,10 @@ class Base
     def self.refresh_todoist_token(refresh_token)
       require 'oauth2'
       
-      credentials = Rails.application.credentials.plugins[:todoist]
-      
       # Use OAuth2 gem for cleaner implementation
       client = OAuth2::Client.new(
-        credentials[:client_id],
-        credentials[:client_secret],
+        ENV['TODOIST_CLIENT_ID'],
+        ENV['TODOIST_CLIENT_SECRET'],
         site: 'https://todoist.com',
         token_url: '/oauth/access_token'
       )

@@ -20,8 +20,8 @@ module Plugins
 
       def client_options
         {
-          client_id: Rails.application.credentials.plugins[:google][:client_id],
-          client_secret: Rails.application.credentials.plugins[:google][:client_secret],
+          client_id: ENV['GOOGLE_CLIENT_ID'],
+          client_secret: ENV['GOOGLE_CLIENT_SECRET'],
           authorization_uri: 'https://accounts.google.com/o/oauth2/auth', # may require change to: '/oauth2/v2/auth'
           token_credential_uri: 'https://accounts.google.com/o/oauth2/token', # may require change to: '/oauth2/v2/token'
           access_type: 'offline',
@@ -29,7 +29,7 @@ module Plugins
             Google::Apis::CalendarV3::AUTH_CALENDAR_READONLY,
             Google::Apis::CalendarV3::AUTH_CALENDAR_EVENTS_READONLY
           ],
-          redirect_uri: "#{Rails.application.credentials.base_url}/plugin_settings/google_calendar/redirect",
+          redirect_uri: "#{ENV['RAILS_BASE_URL'] || 'http://localhost:3000'}/plugin_settings/google_calendar/redirect",
           additional_parameters: {
             prompt: 'consent select_account'
           }
@@ -94,7 +94,8 @@ module Plugins
           {}
         end
       rescue Signet::AuthorizationError
-        handle_erroring_state('Signet::AuthorizationError')
+        Rails.logger.error "Google Calendar authorization error"
+        {}
         {}
       end
     end

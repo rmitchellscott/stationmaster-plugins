@@ -28,7 +28,7 @@ class PluginExecutorService
   private
 
   def execute_plugin_code(plugin_code, plugin_name, settings, trmnl_data)
-    # Load the Base class first
+    # Load the Base class first (needed for OAuthTokenCache access)
     base_class_file = @plugins_path.join('base.rb')
     if File.exist?(base_class_file)
       base_code = File.read(base_class_file)
@@ -58,6 +58,88 @@ class PluginExecutorService
     
     if plugin_classes.empty?
       raise "No plugin class found in #{plugin_name}"
+    end
+    
+    # Merge OAuth tokens into settings if present
+    # OAuth plugins expect credentials in settings[plugin_name]
+    Rails.logger.info "Checking OAuth tokens for #{plugin_name}"
+    Rails.logger.info "trmnl_data keys: #{trmnl_data.keys}"
+    Rails.logger.info "oauth_tokens present?: #{trmnl_data['oauth_tokens'].present?}"
+    
+    if trmnl_data['oauth_tokens'].present?
+      oauth_tokens = trmnl_data['oauth_tokens']
+      Rails.logger.info "OAuth tokens class: #{oauth_tokens.class}"
+      Rails.logger.info "OAuth tokens value: #{oauth_tokens.inspect}"
+      
+      # OAuth tokens might be keyed by provider (e.g., 'google') not plugin name
+      # Map provider to plugin name
+      provider_mapping = {
+        'google_analytics' => 'google',
+        'youtube_analytics' => 'google',
+        'todoist' => 'todoist'
+      }
+      
+      provider = provider_mapping[plugin_name] || plugin_name
+      
+      # Try different ways to access the tokens
+      # Handle ActionController::Parameters as well as Hash
+      if oauth_tokens.is_a?(Hash) || oauth_tokens.is_a?(ActionController::Parameters)
+        Rails.logger.info "OAuth tokens keys: #{oauth_tokens.keys}"
+        
+        # Convert to regular hash if it's ActionController::Parameters
+        oauth_hash = oauth_tokens.is_a?(ActionController::Parameters) ? oauth_tokens.to_unsafe_h : oauth_tokens
+        
+        # Try plugin name first
+        if oauth_hash[plugin_name].present?
+          token_data = oauth_hash[plugin_name]
+          # Get access token from cache if we have refresh token
+          if token_data['refresh_token'].present? && trmnl_data['user'] && trmnl_data['user']['id']
+            user_id = trmnl_data['user']['id']
+            access_token = Base::OAuthTokenCache.get_or_refresh(user_id, provider, token_data['refresh_token'])
+            token_data['access_token'] = access_token if access_token
+            Rails.logger.info "Added access token for #{plugin_name} from OAuth cache"
+          end
+          settings[plugin_name] = token_data
+          Rails.logger.info "Merged OAuth tokens for #{plugin_name} (found under plugin name)"
+        # Try provider name
+        elsif oauth_hash[provider].present?
+          token_data = oauth_hash[provider]
+          # Get access token from cache if we have refresh token
+          if token_data['refresh_token'].present? && trmnl_data['user'] && trmnl_data['user']['id']
+            user_id = trmnl_data['user']['id']
+            access_token = Base::OAuthTokenCache.get_or_refresh(user_id, provider, token_data['refresh_token'])
+            token_data['access_token'] = access_token if access_token
+            Rails.logger.info "Added access token for #{plugin_name} from OAuth cache"
+          end
+          settings[plugin_name] = token_data
+          Rails.logger.info "Merged OAuth tokens for #{plugin_name} (found under provider: #{provider})"
+        # If there's only one key, use that
+        elsif oauth_hash.keys.length == 1
+          key = oauth_hash.keys.first
+          token_data = oauth_hash[key]
+          # Get access token from cache if we have refresh token
+          if token_data['refresh_token'].present? && trmnl_data['user'] && trmnl_data['user']['id']
+            user_id = trmnl_data['user']['id']
+            # Guess provider from plugin name if needed
+            token_provider = provider || key
+            access_token = Base::OAuthTokenCache.get_or_refresh(user_id, token_provider, token_data['refresh_token'])
+            token_data['access_token'] = access_token if access_token
+            Rails.logger.info "Added access token for #{plugin_name} from OAuth cache"
+          end
+          settings[plugin_name] = token_data
+          Rails.logger.info "Merged OAuth tokens for #{plugin_name} (found under key: #{key})"
+        else
+          Rails.logger.warn "No OAuth tokens found for #{plugin_name} or provider #{provider}"
+          Rails.logger.warn "Available keys in oauth_tokens: #{oauth_hash.keys}"
+        end
+      elsif oauth_tokens.is_a?(Array)
+        Rails.logger.info "OAuth tokens is an array: #{oauth_tokens.inspect}"
+        # Handle array format if needed
+      else
+        Rails.logger.warn "OAuth tokens is not a Hash or Array: #{oauth_tokens.class}"
+      end
+    else
+      Rails.logger.info "No OAuth tokens in trmnl_data"
     end
     
     # Use the first matching plugin class

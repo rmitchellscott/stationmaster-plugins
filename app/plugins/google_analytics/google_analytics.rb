@@ -21,13 +21,13 @@ module Plugins
 
       def client_options
         {
-          client_id: Rails.application.credentials.plugins[:google][:client_id],
-          client_secret: Rails.application.credentials.plugins[:google][:client_secret],
+          client_id: ENV['GOOGLE_CLIENT_ID'],
+          client_secret: ENV['GOOGLE_CLIENT_SECRET'],
           authorization_uri: 'https://accounts.google.com/o/oauth2/auth', # may require change to: '/oauth2/v2/auth'
           token_credential_uri: 'https://accounts.google.com/o/oauth2/token', # may require change to: '/oauth2/v2/token'
           access_type: 'offline',
           scope: [Google::Apis::AnalyticsdataV1beta::AUTH_ANALYTICS_READONLY],
-          redirect_uri: "#{Rails.application.credentials.base_url}/plugin_settings/google_analytics/redirect",
+          redirect_uri: "#{ENV['RAILS_BASE_URL'] || 'http://localhost:3000'}/plugin_settings/google_analytics/redirect",
           additional_parameters: {
             prompt: 'consent select_account'
           }
@@ -72,7 +72,7 @@ module Plugins
           {}
         end
       rescue Signet::AuthorizationError, Google::Apis::ClientError => e
-        handle_erroring_state(e.message)
+        Rails.logger.error "Google Analytics API error: #{e.message}"
         {}
       end
     end
@@ -103,11 +103,11 @@ module Plugins
           sleep 2
           retry
         else
-          handle_erroring_state('Google::Apis::AuthorizationError')
+          Rails.logger.error "Google Analytics authorization error"
           {}
         end
       rescue Signet::AuthorizationError, Google::Apis::ClientError => e
-        handle_erroring_state(e.message)
+        Rails.logger.error "Google Analytics API error: #{e.message}"
         {}
       end
     end
@@ -129,8 +129,9 @@ module Plugins
       credentials['google_analytics']['access_token'] = response['access_token']
       plugin_settings.update(encrypted_settings: credentials)
       self.settings = plugin_settings.settings.merge(plugin_settings.encrypted_settings)
-    rescue Signet::AuthorizationError
-      handle_erroring_state('Signet::AuthorizationError')
+    rescue Signet::AuthorizationError => e
+      Rails.logger.error "Google Analytics refresh error: #{e.message}"
+      {}
     end
 
     # user suggestion to prevent the graph always 'dropping off' on current day
@@ -145,6 +146,8 @@ module Plugins
     end
 
     def timestamp_from = lookback_period.days.ago.beginning_of_day.strftime('%Y-%m-%d')
+
+    def lookback_period = settings['lookback_period'].to_i
 
     def property_id = "properties/#{settings['property_id']}"
   end
