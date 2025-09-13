@@ -62,14 +62,8 @@ class PluginExecutorService
     
     # Merge OAuth tokens into settings if present
     # OAuth plugins expect credentials in settings[plugin_name]
-    Rails.logger.info "Checking OAuth tokens for #{plugin_name}"
-    Rails.logger.info "trmnl_data keys: #{trmnl_data.keys}"
-    Rails.logger.info "oauth_tokens present?: #{trmnl_data['oauth_tokens'].present?}"
-    
     if trmnl_data['oauth_tokens'].present?
       oauth_tokens = trmnl_data['oauth_tokens']
-      Rails.logger.info "OAuth tokens class: #{oauth_tokens.class}"
-      Rails.logger.info "OAuth tokens value: #{oauth_tokens.inspect}"
       
       # OAuth tokens might be keyed by provider (e.g., 'google') not plugin name
       # Map provider to plugin name
@@ -84,8 +78,6 @@ class PluginExecutorService
       # Try different ways to access the tokens
       # Handle ActionController::Parameters as well as Hash
       if oauth_tokens.is_a?(Hash) || oauth_tokens.is_a?(ActionController::Parameters)
-        Rails.logger.info "OAuth tokens keys: #{oauth_tokens.keys}"
-        
         # Convert to regular hash if it's ActionController::Parameters
         oauth_hash = oauth_tokens.is_a?(ActionController::Parameters) ? oauth_tokens.to_unsafe_h : oauth_tokens
         
@@ -97,10 +89,8 @@ class PluginExecutorService
             user_id = trmnl_data['user']['id']
             access_token = Base::OAuthTokenCache.get_or_refresh(user_id, provider, token_data['refresh_token'])
             token_data['access_token'] = access_token if access_token
-            Rails.logger.info "Added access token for #{plugin_name} from OAuth cache"
           end
           settings[plugin_name] = token_data
-          Rails.logger.info "Merged OAuth tokens for #{plugin_name} (found under plugin name)"
         # Try provider name
         elsif oauth_hash[provider].present?
           token_data = oauth_hash[provider]
@@ -109,10 +99,8 @@ class PluginExecutorService
             user_id = trmnl_data['user']['id']
             access_token = Base::OAuthTokenCache.get_or_refresh(user_id, provider, token_data['refresh_token'])
             token_data['access_token'] = access_token if access_token
-            Rails.logger.info "Added access token for #{plugin_name} from OAuth cache"
           end
           settings[plugin_name] = token_data
-          Rails.logger.info "Merged OAuth tokens for #{plugin_name} (found under provider: #{provider})"
         # If there's only one key, use that
         elsif oauth_hash.keys.length == 1
           key = oauth_hash.keys.first
@@ -124,22 +112,12 @@ class PluginExecutorService
             token_provider = provider || key
             access_token = Base::OAuthTokenCache.get_or_refresh(user_id, token_provider, token_data['refresh_token'])
             token_data['access_token'] = access_token if access_token
-            Rails.logger.info "Added access token for #{plugin_name} from OAuth cache"
           end
           settings[plugin_name] = token_data
-          Rails.logger.info "Merged OAuth tokens for #{plugin_name} (found under key: #{key})"
         else
           Rails.logger.warn "No OAuth tokens found for #{plugin_name} or provider #{provider}"
-          Rails.logger.warn "Available keys in oauth_tokens: #{oauth_hash.keys}"
         end
-      elsif oauth_tokens.is_a?(Array)
-        Rails.logger.info "OAuth tokens is an array: #{oauth_tokens.inspect}"
-        # Handle array format if needed
-      else
-        Rails.logger.warn "OAuth tokens is not a Hash or Array: #{oauth_tokens.class}"
       end
-    else
-      Rails.logger.info "No OAuth tokens in trmnl_data"
     end
     
     # Use the first matching plugin class
