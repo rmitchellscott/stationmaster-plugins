@@ -1,6 +1,6 @@
 # all ICS calendars look like this; they compile a hash of ~6 values and collections
 module Plugins
-  class OutlookCalendar < Base
+  class IcsCalendar < Base
     include Calendar::Ics
 
     def locals
@@ -10,15 +10,15 @@ module Plugins
 end
 
 # module below is included in all ICS calendars (ex: Apple, Outlook, Fastmail, Nextcloud, etc)
+require_relative 'helpers/base'
 require_relative 'ics_rrule_helper'
 require_relative 'ics_event_helper'
 
 module Calendar
   module Ics
-    include Helper
+    include Calendar::Helpers
     include IcsRruleHelper
     include IcsEventHelper
-    include TimezoneHelper
 
     def events
       @prepare_events ||= prepare_events

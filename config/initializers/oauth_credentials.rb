@@ -41,26 +41,32 @@ end
 
 # Monkey patch Rails credentials to add plugins support
 # This approach preserves the existing Rails credentials while adding our plugins data
-Rails.application.credentials.define_singleton_method(:plugins) do
-  # Return the plugins hash with method access support
-  @plugins_accessor ||= begin
-    plugins_hash = oauth_plugins.dup
-    
-    # Add method access support
-    plugins_hash.define_singleton_method(:method_missing) do |method_name, *args, &block|
-      key = method_name.to_sym
-      if self.key?(key)
-        self[key]
-      else
-        super(method_name, *args, &block)
+# Use after_initialize to ensure this runs after encrypted credentials are loaded
+Rails.application.config.after_initialize do
+  # First remove any existing plugins method from encrypted credentials
+  Rails.application.credentials.singleton_class.send(:remove_method, :plugins) rescue nil
+
+  Rails.application.credentials.define_singleton_method(:plugins) do
+    # Return the plugins hash with method access support
+    @plugins_accessor ||= begin
+      plugins_hash = oauth_plugins.dup
+      
+      # Add method access support
+      plugins_hash.define_singleton_method(:method_missing) do |method_name, *args, &block|
+        key = method_name.to_sym
+        if self.key?(key)
+          self[key]
+        else
+          super(method_name, *args, &block)
+        end
       end
+      
+      plugins_hash.define_singleton_method(:respond_to_missing?) do |method_name, include_private = false|
+        self.key?(method_name.to_sym) || super(method_name, include_private)
+      end
+      
+      plugins_hash
     end
-    
-    plugins_hash.define_singleton_method(:respond_to_missing?) do |method_name, include_private = false|
-      self.key?(method_name.to_sym) || super(method_name, include_private)
-    end
-    
-    plugins_hash
   end
 end
 

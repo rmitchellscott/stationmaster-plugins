@@ -9,13 +9,16 @@ Rails.application.routes.draw do
   namespace :api, defaults: { format: :json } do
     # Plugin discovery and metadata
     get 'plugins', to: 'plugins#index'
-    
+
     # Plugin execution
     post 'plugins/:name/execute', to: 'execution#execute'
-    
-    # Template rendering  
+
+    # Plugin dynamic field options
+    post 'plugins/:plugin_identifier/options/:field_name', to: 'plugin_options#fetch'
+
+    # Template rendering
     post 'render', to: 'render#render_liquid'
-    
+
     # Health check for service monitoring
     get 'health', to: 'health#index'
   end

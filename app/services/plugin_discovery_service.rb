@@ -31,7 +31,7 @@ class PluginDiscoveryService
   def discover_plugin(name, plugin_dir)
     # Look for the main plugin file
     plugin_file = File.join(plugin_dir, "#{name}.rb")
-    
+
     unless File.exist?(plugin_file)
       Rails.logger.warn "Plugin file not found: #{plugin_file}"
       return nil
@@ -277,11 +277,13 @@ class PluginDiscoveryService
   def requires_unavailable_credentials?(plugin_content, plugin_name)
     # Extract credential references from the plugin code
     required_creds = extract_credential_requirements(plugin_content, plugin_name)
-    
+
     return false if required_creds.empty?
-    
+
     # Check if any required credentials are missing
-    required_creds.any? { |cred| !credential_available?(cred) }
+    missing_creds = required_creds.select { |cred| !credential_available?(cred) }
+
+    missing_creds.any?
   end
 
   def extract_credential_requirements(content, plugin_name)
@@ -324,6 +326,23 @@ class PluginDiscoveryService
     dot_notation_matches.each do |service_match|
       service = service_match.first
       credentials << { type: :api_key, service: service.to_sym }
+    end
+    
+    # Pattern 6: ENV['SERVICE_CLIENT_ID'] and ENV['SERVICE_CLIENT_SECRET'] patterns
+    # Used for OAuth credentials stored in environment variables
+    env_oauth_matches = content.scan(/ENV\[['"](\w+)_CLIENT_ID['"]\]/)
+    env_oauth_matches.each do |service_match|
+      service = service_match.first.downcase
+      credentials << { type: :env_oauth, service: service.to_sym, key: :client_id }
+      credentials << { type: :env_oauth, service: service.to_sym, key: :client_secret }
+    end
+    
+    # Pattern 7: ENV['SERVICE_API_TOKEN'] and other API key patterns
+    # Used for API keys stored in environment variables
+    env_api_matches = content.scan(/ENV\[['"](\w+(?:_API)?(?:_TOKEN|_KEY))['"]\]/)
+    env_api_matches.each do |env_var_match|
+      env_var = env_var_match.first
+      credentials << { type: :env_api_key, env_var: env_var.to_sym }
     end
     
     credentials.uniq
@@ -411,6 +430,43 @@ class PluginDiscoveryService
       else
         false
       end
+    when :env_oauth
+      # Handle ENV-based OAuth credentials
+      case cred_info[:service]
+      when :google
+        case cred_info[:key]
+        when :client_id
+          ENV['GOOGLE_CLIENT_ID'].present?
+        when :client_secret
+          ENV['GOOGLE_CLIENT_SECRET'].present?
+        else
+          false
+        end
+      when :todoist
+        case cred_info[:key]
+        when :client_id
+          ENV['TODOIST_CLIENT_ID'].present?
+        when :client_secret
+          ENV['TODOIST_CLIENT_SECRET'].present?
+        else
+          false
+        end
+      else
+        # Generic service check - construct env var name
+        service_upper = cred_info[:service].to_s.upcase
+        case cred_info[:key]
+        when :client_id
+          ENV["#{service_upper}_CLIENT_ID"].present?
+        when :client_secret
+          ENV["#{service_upper}_CLIENT_SECRET"].present?
+        else
+          false
+        end
+      end
+    when :env_api_key
+      # Handle ENV-based API keys
+      env_var = cred_info[:env_var].to_s
+      ENV[env_var].present?
     when :api_key
       case cred_info[:service]
       when :github_commit_graph_token
@@ -429,13 +485,15 @@ class PluginDiscoveryService
   
   def extract_oauth_config(content, plugin_name)
     # Look for OAuth configuration patterns in plugin class methods
-    
+
     # Check for client_options method which contains OAuth config
     client_options_match = content.match(/def\s+client_options\s*\n(.*?)\n\s*end/m)
-    return nil unless client_options_match
+    unless client_options_match
+      return nil
+    end
     
     client_options_content = client_options_match[1]
-    
+
     # Extract OAuth configuration from client_options hash
     oauth_config = {}
     
@@ -457,7 +515,7 @@ class PluginDiscoveryService
         # Extract scope constant and map to actual scope string
         scopes = extract_google_scopes(scope_content)
       else
-        # Handle quoted string scopes: scope: ["data:read", "data:write"] 
+        # Handle quoted string scopes: scope: ["data:read", "data:write"]
         scopes = scope_content.scan(/['"]([^'"]+)['"]/).flatten
       end
       oauth_config['scopes'] = scopes
@@ -511,16 +569,18 @@ class PluginDiscoveryService
     # Map Google API scope constants to actual scope URLs
     scope_mapping = {
       'AUTH_ANALYTICS_READONLY' => 'https://www.googleapis.com/auth/analytics.readonly',
-      'AUTH_YT_ANALYTICS_READONLY' => 'https://www.googleapis.com/auth/yt-analytics.readonly'
+      'AUTH_YT_ANALYTICS_READONLY' => 'https://www.googleapis.com/auth/yt-analytics.readonly',
+      'AUTH_CALENDAR_READONLY' => 'https://www.googleapis.com/auth/calendar.readonly',
+      'AUTH_CALENDAR_EVENTS_READONLY' => 'https://www.googleapis.com/auth/calendar.events.readonly'
     }
-    
+
     scopes = []
     scope_mapping.each do |constant, scope_url|
       if scope_content.include?(constant)
         scopes << scope_url
       end
     end
-    
+
     scopes
   end
   

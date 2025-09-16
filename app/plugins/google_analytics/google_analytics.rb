@@ -21,13 +21,13 @@ module Plugins
 
       def client_options
         {
-          client_id: ENV['GOOGLE_CLIENT_ID'],
-          client_secret: ENV['GOOGLE_CLIENT_SECRET'],
+          client_id: Rails.application.credentials.plugins[:google][:client_id],
+          client_secret: Rails.application.credentials.plugins[:google][:client_secret],
           authorization_uri: 'https://accounts.google.com/o/oauth2/auth', # may require change to: '/oauth2/v2/auth'
           token_credential_uri: 'https://accounts.google.com/o/oauth2/token', # may require change to: '/oauth2/v2/token'
           access_type: 'offline',
           scope: [Google::Apis::AnalyticsdataV1beta::AUTH_ANALYTICS_READONLY],
-          redirect_uri: "#{ENV['RAILS_BASE_URL'] || 'http://localhost:3000'}/plugin_settings/google_analytics/redirect",
+          redirect_uri: "#{Rails.application.credentials.base_url}/plugin_settings/google_analytics/redirect",
           additional_parameters: {
             prompt: 'consent select_account'
           }
