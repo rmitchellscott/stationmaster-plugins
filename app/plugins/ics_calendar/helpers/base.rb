@@ -118,5 +118,44 @@ module Calendar
       # Fall back to default behavior from Formatter
       super
     end
+
+    def formulate_and_group_events_by_day(events, today_in_tz, days_to_show)
+      # Parse today's date
+      today = Date.parse(today_in_tz)
+
+      # Generate the date range for the number of days to show
+      date_range = (0...days_to_show).map { |i| today + i.days }
+
+      # Group events by their date
+      grouped_events = {}
+
+      date_range.each do |date|
+        # Format the date using the existing date_format helper
+        formatted_date = if date_format == :short
+                          date.strftime('%a %b %-d')
+                        else
+                          date.strftime(date_format)
+                        end
+
+        # Find events for this date
+        day_events = events.select do |event|
+          event_date = case event[:date_time]
+                      when Date
+                        event[:date_time]
+                      when String
+                        Date.parse(event[:date_time])
+                      when Time, DateTime
+                        event[:date_time].to_date
+                      else
+                        next
+                      end
+          event_date == date
+        end
+
+        grouped_events[formatted_date] = day_events
+      end
+
+      grouped_events
+    end
   end
 end

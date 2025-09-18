@@ -33,14 +33,23 @@ class PluginExecutorService
     if File.exist?(base_class_file)
       base_code = File.read(base_class_file)
       eval(base_code)
-      
+
       # Ensure Rails compatibility for templates
       Base.ensure_rails_compatibility! if defined?(Base)
     end
-    
+
+    # Load helper files if they exist for this plugin
+    helpers_dir = @plugins_path.join(plugin_name, 'helpers')
+    if Dir.exist?(helpers_dir)
+      Dir.glob(helpers_dir.join('*.rb')).each do |helper_file|
+        helper_code = File.read(helper_file)
+        eval(helper_code)
+      end
+    end
+
     # Create a safe execution environment
     plugin_module = Module.new
-    
+
     # Evaluate the plugin code within the module
     plugin_module.module_eval(plugin_code)
     

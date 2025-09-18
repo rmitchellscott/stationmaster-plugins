@@ -1,7 +1,7 @@
 # all ICS calendars look like this; they compile a hash of ~6 values and collections
 module Plugins
   class IcsCalendar < Base
-    include Calendar::Ics
+    include Calendar::Helpers
 
     def locals
       { events:, event_layout:, include_description:, include_event_time:, first_day:, scroll_time:, scroll_time_end:, time_format:, today_in_tz: beginning_of_day, zoom_mode: }

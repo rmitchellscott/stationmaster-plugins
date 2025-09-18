@@ -29,7 +29,10 @@ class Api::ExecutionController < Api::BaseController
         
         # Add TRMNL data to plugin data
         plugin_data['trmnl'] = trmnl_data
-        
+
+        # Add plugin_name for template access (needed by title_bar partial)
+        plugin_data['plugin_name'] = plugin_name
+
         # Add instance_name for template access
         plugin_data['instance_name'] = trmnl_data.dig('plugin_settings', 'instance_name') || 'Plugin Instance'
         
@@ -127,10 +130,10 @@ class Api::ExecutionController < Api::BaseController
         
         def format_number(number)
           return "0" if number.nil?
-          
+
           # Convert to integer or float as appropriate
           num = number.is_a?(String) ? number.to_f : number
-          
+
           # Handle decimals - if it's a whole number, format as integer
           if num == num.to_i
             num.to_i.to_s.gsub(/(\d)(?=(\d{3})+(?!\d))/, '\1,')
@@ -138,6 +141,48 @@ class Api::ExecutionController < Api::BaseController
             # Format with 2 decimal places and add commas
             ("%.2f" % num).gsub(/(\d)(?=(\d{3})+\.)/, '\1,')
           end
+        end
+
+        def formulate_and_group_events_by_day(events, today_in_tz, days_to_show)
+          # Handle different date input types
+          today = case today_in_tz
+                  when String
+                    Date.parse(today_in_tz)
+                  when Date
+                    today_in_tz
+                  else
+                    today_in_tz.to_date  # Handle TimeWithZone, Time, DateTime
+                  end
+
+          # Generate the date range for the number of days to show
+          date_range = (0...days_to_show).map { |i| today + i.days }
+
+          # Group events by their date
+          grouped_events = {}
+
+          date_range.each do |date|
+            # Format the date - use a default format since we don't have access to date_format helper here
+            formatted_date = date.strftime('%A, %B %-d')
+
+            # Find events for this date
+            day_events = events.select do |event|
+              event_date = case event[:date_time]
+                          when Date
+                            event[:date_time]
+                          when String
+                            Date.parse(event[:date_time])
+                          when Time, DateTime
+                            event[:date_time].to_date
+                          else
+                            next
+                          end
+              event_date == date
+            end
+
+            grouped_events[formatted_date] = day_events
+          end
+
+          grouped_events
         end
       end
       
