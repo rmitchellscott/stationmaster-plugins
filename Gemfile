@@ -40,6 +40,7 @@ gem "google-apis-youtube_analytics_v2", "~> 0.13"
 
 # Calendar parsing
 gem "icalendar", "~> 2.10"
+gem "icalendar-recurrence", "~> 1.2"
 
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem

@@ -196,6 +196,11 @@ class Base
   def setting(key, default = nil)
     @settings[key.to_s] || @settings[key.to_sym] || default
   end
+
+  # Error handling for plugins
+  def handle_erroring_state(message)
+    Rails.logger.error "Plugin #{self.class.name} error: #{message}"
+  end
   
   # User object providing timezone and datetime capabilities
   def user
@@ -304,13 +309,19 @@ class Base
   def wrap_oauth_settings(original_settings)
     # Start with original settings
     wrapped = original_settings.dup
-    
+
+    # Only inject OAuth tokens for plugins that actually need them
+    plugin_name = self.class.name.demodulize.underscore
+    oauth_plugins = %w[google_calendar youtube_analytics google_analytics todoist]
+
+    return wrapped unless oauth_plugins.include?(plugin_name)
+
     # Only inject OAuth tokens if we have them from Go
     oauth_tokens = @trmnl_data&.dig('oauth_tokens')
     user_data = @trmnl_data&.dig('user')
-    
+
     return wrapped unless oauth_tokens && user_data
-    
+
     user_id = user_data['id']
     return wrapped unless user_id
     

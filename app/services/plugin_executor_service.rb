@@ -71,7 +71,10 @@ class PluginExecutorService
     
     # Merge OAuth tokens into settings if present
     # OAuth plugins expect credentials in settings[plugin_name]
-    if trmnl_data['oauth_tokens'].present?
+    # Only inject OAuth tokens for plugins that actually need them
+    oauth_plugins = %w[google_calendar youtube_analytics google_analytics todoist]
+
+    if trmnl_data['oauth_tokens'].present? && oauth_plugins.include?(plugin_name)
       oauth_tokens = trmnl_data['oauth_tokens']
       
       # OAuth tokens might be keyed by provider (e.g., 'google') not plugin name

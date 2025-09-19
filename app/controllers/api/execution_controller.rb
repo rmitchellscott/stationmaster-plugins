@@ -47,16 +47,16 @@ class Api::ExecutionController < Api::BaseController
           render json: { error: "Template rendering failed - no template found for layout: #{layout}" }, status: :unprocessable_content, formats: [:json]
         end
       else
-        # Plugin execution failed - force JSON format for error response
-        render json: { error: result[:error] || "Plugin execution failed" }, status: :unprocessable_content, formats: [:json]
+        # Plugin execution failed - use base controller's error method
+        render_error(result[:error] || "Plugin execution failed", status: :unprocessable_entity)
       end
-      
+
     rescue => e
       Rails.logger.error "Plugin execution failed for #{plugin_name}: #{e.message}"
       Rails.logger.error e.backtrace.join("\n")
-      
-      # Simple error response - force JSON format
-      render json: { error: "Plugin execution failed: #{e.message}" }, status: :internal_server_error, formats: [:json]
+
+      # Simple error response - use base controller's error method
+      render_error("Plugin execution failed: #{e.message}", status: :internal_server_error)
     end
   end
   
