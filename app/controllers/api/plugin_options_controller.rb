@@ -7,50 +7,53 @@ class Api::PluginOptionsController < Api::BaseController
   def fetch
     plugin_identifier = params[:plugin_identifier]
     field_name = params[:field_name]
-    
+
     Rails.logger.info "Fetching dynamic options for #{plugin_identifier}.#{field_name}"
-    
+
     begin
       # Get OAuth tokens from request
       oauth_tokens = params[:oauth_tokens] || {}
       user_data = params[:user] || {}
       user_id = user_data['id'] || 'anonymous'
-      
-      # Check cache first
-      cache_key = "#{user_id}:#{plugin_identifier}:#{field_name}"
+
+      # Use the plugin identifier directly
+      actual_plugin_identifier = plugin_identifier
+
+      # Check cache first (use actual identifier for cache key)
+      cache_key = "#{user_id}:#{actual_plugin_identifier}:#{field_name}"
       cached_options = get_cached_options(cache_key)
-      
+
       if cached_options
         Rails.logger.info "Returning cached options for #{cache_key}"
         return render_success({
           options: cached_options,
           field_name: field_name,
-          plugin: plugin_identifier,
+          plugin: actual_plugin_identifier,
           cached_at: @@cache_timestamps[cache_key].iso8601,
           from_cache: true
         })
       end
-      
-      # Load the plugin class
-      plugin_class = load_plugin_class(plugin_identifier)
+
+      # Load the plugin class using actual identifier
+      plugin_class = load_plugin_class(actual_plugin_identifier)
       
       unless plugin_class
-        return render_error("Plugin not found: #{plugin_identifier}", status: :not_found)
+        return render_error("Plugin not found: #{actual_plugin_identifier}", status: :not_found)
       end
-      
+
       # Check if the plugin has the requested method
       method_name = field_name.to_sym
       unless plugin_class.respond_to?(method_name)
         return render_error("Plugin does not support fetching #{field_name}", status: :unprocessable_entity)
       end
-      
+
       # Get options based on the plugin and field
-      Rails.logger.info "Fetching options for #{plugin_identifier}.#{field_name}"
+      Rails.logger.info "Fetching options for #{actual_plugin_identifier}.#{field_name}"
       Rails.logger.info "Plugin class: #{plugin_class.name}"
       Rails.logger.info "Method name: #{method_name}"
       Rails.logger.info "OAuth tokens present: #{oauth_tokens.present?}"
-      
-      options = fetch_plugin_options(plugin_class, method_name, plugin_identifier, oauth_tokens, user_data)
+
+      options = fetch_plugin_options(plugin_class, method_name, actual_plugin_identifier, oauth_tokens, user_data)
       
       Rails.logger.info "Options returned: #{options.inspect}"
       
@@ -61,7 +64,7 @@ class Api::PluginOptionsController < Api::BaseController
         render_success({
           options: options,
           field_name: field_name,
-          plugin: plugin_identifier,
+          plugin: actual_plugin_identifier,
           cached_at: Time.current.iso8601,
           from_cache: false
         })
@@ -82,82 +85,48 @@ class Api::PluginOptionsController < Api::BaseController
   end
   
   private
-  
-  def load_plugin_class(plugin_identifier)
-    Rails.logger.info "[DEBUG] Loading plugin class for identifier: #{plugin_identifier}"
 
+
+  def load_plugin_class(plugin_identifier)
     plugin_file = Rails.root.join('app', 'plugins', plugin_identifier, "#{plugin_identifier}.rb")
-    Rails.logger.info "[DEBUG] Plugin file path: #{plugin_file}"
 
     unless File.exist?(plugin_file)
-      Rails.logger.warn "[DEBUG] Plugin file does not exist: #{plugin_file}"
       return nil
     end
-
-    Rails.logger.info "[DEBUG] Plugin file exists, loading base class"
 
     # Load base class if needed
     base_file = Rails.root.join('app', 'plugins', 'base.rb')
     if File.exist?(base_file)
-      Rails.logger.info "[DEBUG] Loading base file: #{base_file}"
       require base_file
-    else
-      Rails.logger.warn "[DEBUG] Base file not found: #{base_file}"
     end
 
     # Load any helper files first
     helpers_dir = Rails.root.join('app', 'plugins', plugin_identifier, 'helpers')
     if Dir.exist?(helpers_dir)
-      Rails.logger.info "[DEBUG] Loading helpers from: #{helpers_dir}"
       Dir.glob(File.join(helpers_dir, '**', '*.rb')).sort.each do |helper_file|
-        Rails.logger.info "[DEBUG] Loading helper file: #{helper_file}"
         require helper_file
       end
-      Rails.logger.info "[DEBUG] All helper files loaded successfully"
-    else
-      Rails.logger.info "[DEBUG] No helpers directory found: #{helpers_dir}"
     end
 
     # Load the plugin file
-    Rails.logger.info "[DEBUG] Requiring plugin file: #{plugin_file}"
     require plugin_file
-    Rails.logger.info "[DEBUG] Plugin file loaded successfully"
 
     # Find the plugin class
     class_name = plugin_identifier.camelize
-    Rails.logger.info "[DEBUG] Looking for class: #{class_name}"
 
     # Try to get the class from Plugins module
-    if defined?(Plugins)
-      Rails.logger.info "[DEBUG] Plugins module is defined"
-      if Plugins.const_defined?(class_name)
-        Rails.logger.info "[DEBUG] Found class #{class_name} in Plugins module"
-        result = Plugins.const_get(class_name)
-        Rails.logger.info "[DEBUG] Successfully got class: #{result}"
-        return result
-      else
-        Rails.logger.warn "[DEBUG] Class #{class_name} not found in Plugins module"
-        Rails.logger.info "[DEBUG] Available constants in Plugins: #{Plugins.constants}"
-      end
-    else
-      Rails.logger.warn "[DEBUG] Plugins module not defined"
+    if defined?(Plugins) && Plugins.const_defined?(class_name)
+      return Plugins.const_get(class_name)
     end
 
     # Try global namespace
     if Object.const_defined?(class_name)
-      Rails.logger.info "[DEBUG] Found class #{class_name} in global namespace"
-      result = Object.const_get(class_name)
-      Rails.logger.info "[DEBUG] Successfully got class from global: #{result}"
-      return result
-    else
-      Rails.logger.warn "[DEBUG] Class #{class_name} not found in global namespace"
+      return Object.const_get(class_name)
     end
 
-    Rails.logger.error "[DEBUG] Failed to find class #{class_name} anywhere"
     nil
   rescue => e
     Rails.logger.error "Failed to load plugin class for #{plugin_identifier}: #{e.message}"
-    Rails.logger.error "[DEBUG] Exception backtrace: #{e.backtrace.join("\n")}"
     nil
   end
   

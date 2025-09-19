@@ -101,11 +101,18 @@ class Base
     @settings = settings || {}
     @trmnl_data = trmnl_data || {}
   end
-  
+
   # Main method that should be implemented by plugins
   # Returns a hash of data to be used in template rendering
   def locals
     raise NotImplementedError, "#{self.class} must implement #locals method"
+  end
+
+  # Simple HTML sanitization method for plugin use
+  def sanitize(text)
+    return '' if text.nil?
+    # Basic HTML tag removal - strips all HTML tags
+    text.to_s.gsub(/<[^>]*>/, '')
   end
   
   # Helper method for making HTTP requests

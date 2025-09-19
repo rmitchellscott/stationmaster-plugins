@@ -1,9 +1,10 @@
 class Api::ExecutionController < Api::BaseController
   include ActionView::Rendering
   include ActionController::Helpers
-  
+
   # Ensure API-only behavior
   before_action :set_api_headers
+  before_action :inject_full_calendar_license
   
   def execute
     plugin_name = params[:name]
@@ -40,8 +41,8 @@ class Api::ExecutionController < Api::BaseController
         rendered_html = render_erb_template(plugin_name, layout, plugin_data)
         
         if rendered_html
-          # Return rendered HTML as plain text
-          render plain: rendered_html
+          # Return rendered HTML properly
+          render html: rendered_html.html_safe, layout: false
         else
           render json: { error: "Template rendering failed - no template found for layout: #{layout}" }, status: :unprocessable_content, formats: [:json]
         end
@@ -60,11 +61,26 @@ class Api::ExecutionController < Api::BaseController
   end
   
   private
-  
+
   def set_api_headers
     # Set JSON content type for error responses, but allow HTML for successful template rendering
     unless params[:action] == 'execute' && request.format == :html
       response.headers['Content-Type'] = 'application/json'
+    end
+  end
+
+  def inject_full_calendar_license
+    # Inject GPL license key for FullCalendar if not already present
+    if Rails.application.credentials.plugins && !Rails.application.credentials.plugins[:full_calendar]
+      # Create a new hash with the existing plugins and add full_calendar
+      plugins_with_license = Rails.application.credentials.plugins.to_h.merge(
+        full_calendar: { license_key: 'GPL-My-Project-Is-Open-Source' }
+      )
+
+      # Replace the plugins hash with our extended version
+      Rails.application.credentials.plugins.define_singleton_method(:full_calendar) do
+        OpenStruct.new(license_key: 'GPL-My-Project-Is-Open-Source')
+      end
     end
   end
   
@@ -144,6 +160,7 @@ class Api::ExecutionController < Api::BaseController
         end
 
         def formulate_and_group_events_by_day(events, today_in_tz, days_to_show)
+          Rails.logger.info "formulate_and_group_events_by_day called with today_in_tz: #{today_in_tz.inspect} (class: #{today_in_tz.class}), events count: #{events.size}"
           # Handle different date input types
           today = case today_in_tz
                   when String
@@ -153,6 +170,7 @@ class Api::ExecutionController < Api::BaseController
                   else
                     today_in_tz.to_date  # Handle TimeWithZone, Time, DateTime
                   end
+          Rails.logger.info "Converted today to: #{today.inspect}"
 
           # Generate the date range for the number of days to show
           date_range = (0...days_to_show).map { |i| today + i.days }
@@ -166,16 +184,19 @@ class Api::ExecutionController < Api::BaseController
 
             # Find events for this date
             day_events = events.select do |event|
-              event_date = case event[:date_time]
-                          when Date
+              Rails.logger.info "Event date_time class: #{event[:date_time].class.name}"
+              event_date = case event[:date_time].class.name
+                          when 'Date'
                             event[:date_time]
-                          when String
+                          when 'String'
                             Date.parse(event[:date_time])
-                          when Time, DateTime
+                          when 'Time', 'DateTime', 'ActiveSupport::TimeWithZone'
                             event[:date_time].to_date
                           else
+                            Rails.logger.warn "Unknown date_time type: #{event[:date_time].class} - #{event[:date_time].inspect}"
                             next
                           end
+              Rails.logger.info "Comparing event date #{event_date} (#{event[:summary]}) with #{date}"
               event_date == date
             end
 

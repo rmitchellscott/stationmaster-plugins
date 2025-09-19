@@ -38,6 +38,9 @@ gem "google-apis-analyticsdata_v1beta", "~> 0.17"
 gem "google-apis-calendar_v3", "~> 0.31"
 gem "google-apis-youtube_analytics_v2", "~> 0.13"
 
+# Calendar parsing
+gem "icalendar", "~> 2.10"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"

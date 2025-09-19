@@ -131,12 +131,19 @@ class PluginExecutorService
     
     # Use the first matching plugin class
     plugin_class = plugin_classes.first
+    Rails.logger.info "Final settings being passed to plugin: #{settings.inspect}"
+    Rails.logger.info "Settings keys: #{settings.keys}"
+    Rails.logger.info "Settings['google_calendar']: #{settings['google_calendar'].inspect}"
     plugin_instance = plugin_class.new(settings, trmnl_data)
-    
+
     # Execute the plugin and capture result
     result = if plugin_instance.respond_to?(:locals)
       # Plugin returns locals data directly (new format)
-      plugin_instance.locals
+      Rails.logger.info "Calling locals method on plugin instance"
+      locals_result = plugin_instance.locals
+      Rails.logger.info "Locals result keys: #{locals_result.keys rescue 'error'}"
+      Rails.logger.info "Events in locals: #{locals_result[:events].inspect rescue 'error getting events'}" if locals_result.is_a?(Hash)
+      locals_result
     elsif plugin_instance.respond_to?(:execute)
       # Plugin has execute method
       plugin_instance.execute(settings)
