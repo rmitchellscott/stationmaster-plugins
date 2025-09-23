@@ -163,105 +163,6 @@ module Calendar
   end
 end
 
-# Define IcsRruleHelper module
-module IcsRruleHelper
-  # Placeholder for ICS RRULE (recurring rule) functionality
-  # This module handles recurring events in ICS calendars
-
-  def occurrences(event)
-    return [event] unless event.rrule.present?
-
-    # Calculate date range for recurring events
-    start_date = recurring_event_start_date
-    end_date = recurring_event_end_date
-
-    Rails.logger.info "Expanding recurring event '#{event.summary}' between #{start_date} and #{end_date}"
-
-    # Use icalendar gem's built-in method to expand recurring events
-    begin
-      result = event.occurrences_between(start_date, end_date)
-      expanded_count = result&.count || 0
-      Rails.logger.info "Recurring event '#{event.summary}' expanded to #{expanded_count} occurrences"
-
-      if expanded_count > 0 && result.first
-        Rails.logger.info "First occurrence: #{result.first.dtstart}"
-        Rails.logger.info "Last occurrence: #{result.last.dtstart}" if result.count > 1
-      end
-
-      result.nil? ? [event] : result  # Handle nil return value
-    rescue => e
-      Rails.logger.error "Error expanding recurring event '#{event.summary}': #{e.message}"
-      Rails.logger.error "RRULE: #{event.rrule.first}"
-      [event]  # Fallback to single event if expansion fails
-    end
-  end
-end
-
-# Define IcsEventHelper module
-module IcsEventHelper
-  # Placeholder for ICS event processing functionality
-  # This module handles event processing for ICS calendars
-
-  def event_should_be_ignored?(event)
-    # Check if event should be ignored based on ignore phrases
-    return false unless event&.summary
-
-    ignore_phrases = settings['ignore_phrases_exact_match']
-    return false unless ignore_phrases.present?
-
-    phrases = line_separated_string_to_array(ignore_phrases)
-    phrases.any? { |phrase| event.summary.to_s.strip == phrase.strip }
-  end
-
-  def sanitize_description(description)
-    # Sanitize event description - remove HTML tags
-    return "" unless description.present?
-
-    # Remove HTML tags and clean up whitespace
-    description.to_s.gsub(/<[^>]*>/, '').strip
-  end
-
-  def calname(event)
-    # Extract calendar name from event
-    # Try to get the calendar name from the event's parent calendar
-    if defined?(@calendar_names) && @calendar_names[event]
-      @calendar_names[event]
-    elsif event.respond_to?(:x_wr_calname)
-      event.x_wr_calname.to_s
-    elsif event.respond_to?(:parent) && event.parent.respond_to?(:x_wr_calname)
-      event.parent.x_wr_calname.to_s
-    else
-      # Fallback to ICS URL filename or generic name
-      settings['ics_url']&.split('/')&.last&.split('.')&.first || "Calendar"
-    end
-  end
-
-  def all_day_event?(event)
-    # Check if event is an all-day event
-    return false unless event&.dtstart
-
-    # All-day events typically don't have time components
-    event.dtstart.is_a?(Date) ||
-    (event.dtstart.respond_to?(:hour) && event.dtstart.hour == 0 && event.dtstart.min == 0)
-  end
-
-  def guaranteed_end_time(event)
-    # Ensure event has an end time
-    if event.dtend.present?
-      event.dtend.in_time_zone(time_zone)
-    elsif event.dtstart.present?
-      # If no end time, assume 1 hour duration
-      event.dtstart.in_time_zone(time_zone) + 1.hour
-    else
-      now_in_tz + 1.hour
-    end
-  end
-
-  def formatted_time
-    # Get the time format from settings
-    settings['time_format'] || "%-l:%M%P"
-  end
-end
 
 # module below is included in all ICS calendars (ex: Apple, Outlook, Fastmail, Nextcloud, etc)
 module Calendar
@@ -283,7 +184,11 @@ module Calendar
         final_events.first(3).each { |e| Rails.logger.info "  - #{e[:summary]} at #{e[:date_time]}" }
       end
       final_events
-    rescue StandardError
+    rescue StandardError => e
+      Rails.logger.error "=== ICS Calendar Debug: StandardError in prepare_events ==="
+      Rails.logger.error "Error class: #{e.class}"
+      Rails.logger.error "Error message: #{e.message}"
+      Rails.logger.error "Error backtrace: #{e.backtrace.first(5).join("\n")}"
       handle_erroring_state("ics_url is invalid")
       []
     rescue ArgumentError => e
@@ -397,8 +302,8 @@ module Calendar
       # Handle both Icalendar::Event and Icalendar::Recurrence::Occurrence objects
       is_occurrence = event.is_a?(Icalendar::Recurrence::Occurrence)
 
-      # Get the original event for metadata if this is an occurrence
-      original_event = is_occurrence ? event.event : event
+      # For metadata, use the event object directly (both Event and Occurrence have the needed properties)
+      original_event = event
 
       if event_should_be_ignored?(original_event)
         Rails.logger.info "Event ignored: #{original_event.summary} (should be ignored)"
