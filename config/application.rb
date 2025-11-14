@@ -40,12 +40,8 @@ module StationmasterPlugins
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
-    
-    # Load TRMNL internationalization locales
+
     config.after_initialize do
-      require 'trmnl/i18n'
-      TRMNL::I18n.load_locales
-      
       # Set base_url from environment variable for image serving
       if ENV['RAILS_BASE_URL']
         Rails.application.credentials.define_singleton_method(:base_url) { ENV['RAILS_BASE_URL'] }

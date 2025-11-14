@@ -1,21 +1,6 @@
 # Stationmaster Plugins
 
-Rails API service for rendering Liquid templates and executing plugins for the Stationmaster platform.
-
-## Liquid Rendering
-
-Parse Liquid templates with data via POST to `/api/render`:
-
-```bash
-curl -X POST http://localhost:3000/api/render \
-  -H "Content-Type: application/json" \
-  -d '{
-    "template": "Hello {{ name }}!",
-    "data": { "name": "World" }
-  }'
-```
-
-Returns `rendered_html` with the parsed template.
+Rails API service for executing external plugins for the Stationmaster platform.
 
 ## API Endpoints
 
@@ -31,11 +16,6 @@ Returns `rendered_html` with the parsed template.
 - `POST /api/plugins/:plugin_identifier/options/:field_name` - Fetch dynamic field options
   - Params: `oauth_tokens`, `user` data
   - Returns: Available options for dropdowns/selects (cached 5 min)
-
-### Template Rendering
-- `POST /api/render` - Parse Liquid template with data
-  - Params: `template`, `data`
-  - Returns: `rendered_html`
 
 ### Health Check
 - `GET /api/health` - Service health status
@@ -58,4 +38,4 @@ All plugins inherit from `Base` (app/plugins/base.rb:1) and implement `locals` m
 
 ## Development
 
-Rails 8.0+, Ruby 3.3+. Uses Liquid 5.0, supports OAuth flows for Google Calendar, Todoist, YouTube Analytics, and other integrations.
+Rails 8.0+, Ruby 3.3+. Supports OAuth flows for Google Calendar, Todoist, YouTube Analytics, and other integrations.

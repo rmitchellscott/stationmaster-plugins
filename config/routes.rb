@@ -16,9 +16,6 @@ Rails.application.routes.draw do
     # Plugin dynamic field options
     post 'plugins/:plugin_identifier/options/:field_name', to: 'plugin_options#fetch'
 
-    # Template rendering
-    post 'render', to: 'render#render_liquid'
-
     # Health check for service monitoring
     get 'health', to: 'health#index'
   end
