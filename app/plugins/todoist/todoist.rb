@@ -8,6 +8,14 @@ module Plugins
       { tasks: }
     end
 
+    def self.client_options
+      {
+        authorization_uri: 'https://todoist.com/oauth/authorize',
+        token_credential_uri: 'https://todoist.com/oauth/access_token',
+        scope: 'data:read'
+      }
+    end
+
     # Extracted from Todoist Web App API Calls to `https://app.todoist.com/api/v9.223/sync`
     FILTER_DATE_OPTIONS_MAP = {
       all: nil,
@@ -354,7 +362,7 @@ module Plugins
       }
     end
 
-    def access_token = settings.dig('todoist', 'access_token')
+    def access_token = settings.dig('todoist', 'access_token') || settings.dig('todoist', 'refresh_token')
 
     def today_view? = project_id == 'today'
 

@@ -195,16 +195,17 @@ class Api::PluginOptionsController < Api::BaseController
   
   def fetch_todoist_options(plugin_class, method_name, oauth_tokens, user_data)
     todoist_tokens = oauth_tokens['todoist'] || {}
-    
-    if todoist_tokens['refresh_token'].blank?
-      Rails.logger.warn "No Todoist refresh token available"
+
+    Rails.logger.info "Todoist tokens received: keys=#{todoist_tokens.keys.inspect}, has_refresh=#{todoist_tokens['refresh_token'].present?}, has_access=#{todoist_tokens['access_token'].present?}"
+
+    # Todoist uses long-lived access tokens
+    access_token = todoist_tokens['access_token'] || todoist_tokens['refresh_token']
+
+    if access_token.blank?
+      Rails.logger.warn "No Todoist access token available (tokens: #{todoist_tokens.inspect})"
       return nil
     end
-    
-    # Get or refresh access token
-    user_id = user_data['id'] || 'temp_user'
-    access_token = Base::OAuthTokenCache.get_or_refresh(user_id, 'todoist', todoist_tokens['refresh_token'])
-    
+
     unless access_token
       Rails.logger.error "Failed to get Todoist access token"
       return nil

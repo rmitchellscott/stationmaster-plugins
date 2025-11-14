@@ -487,7 +487,8 @@ class PluginDiscoveryService
     # Look for OAuth configuration patterns in plugin class methods
 
     # Check for client_options method which contains OAuth config
-    client_options_match = content.match(/def\s+client_options\s*\n(.*?)\n\s*end/m)
+    # Matches both "def client_options" and "def self.client_options"
+    client_options_match = content.match(/def\s+(?:self\.)?client_options\s*\n(.*?)\n\s*end/m)
     unless client_options_match
       return nil
     end
@@ -535,7 +536,7 @@ class PluginDiscoveryService
     when 'google'
       client_id = ENV['GOOGLE_CLIENT_ID']
       client_secret = ENV['GOOGLE_CLIENT_SECRET']
-      
+
       if client_id.present? && client_secret.present?
         oauth_config['client_id'] = client_id
         oauth_config['client_secret'] = client_secret
@@ -546,7 +547,7 @@ class PluginDiscoveryService
     when 'todoist'
       client_id = ENV['TODOIST_CLIENT_ID']
       client_secret = ENV['TODOIST_CLIENT_SECRET']
-      
+
       if client_id.present? && client_secret.present?
         oauth_config['client_id'] = client_id
         oauth_config['client_secret'] = client_secret
@@ -556,7 +557,7 @@ class PluginDiscoveryService
       end
     else
       Rails.logger.warn "Unknown OAuth provider: #{provider} for plugin #{plugin_name}"
-      return nil # Unknown provider
+      return nil
     end
     
     oauth_config

@@ -361,16 +361,12 @@ class Base
       wrapped['google_calendar']['access_token'] = access_token if access_token
     end
     
-    # Inject Todoist tokens
-    if oauth_tokens['todoist']&.dig('refresh_token')
-      refresh_token = oauth_tokens['todoist']['refresh_token']
-      access_token = OAuthTokenCache.get_or_refresh(user_id, 'todoist', refresh_token)
-      
-      # Always inject refresh token, access token is optional
+    # Inject Todoist tokens (uses long-lived access tokens, not refresh tokens)
+    if oauth_tokens['todoist']&.dig('access_token')
       wrapped['todoist'] = {
-        'refresh_token' => refresh_token
+        'access_token' => oauth_tokens['todoist']['access_token']
       }
-      wrapped['todoist']['access_token'] = access_token if access_token
+      wrapped['todoist']['refresh_token'] = oauth_tokens['todoist']['refresh_token'] if oauth_tokens['todoist']['refresh_token'].present?
     end
     
     wrapped
