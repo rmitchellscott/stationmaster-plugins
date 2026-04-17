@@ -39,3 +39,8 @@ All plugins inherit from `Base` (app/plugins/base.rb:1) and implement `locals` m
 ## Development
 
 Rails 8.0+, Ruby 3.3+. Supports OAuth flows for Google Calendar, Todoist, YouTube Analytics, and other integrations.
+
+## License
+Copyright (C) 2025 Mitchell Scott
+
+Licensed under the GNU Affero General Public License v3.0.
